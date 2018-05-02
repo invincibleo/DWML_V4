@@ -1,0 +1,97 @@
+name: py3SED
+channels:
+- defaults
+dependencies:
+- bleach=1.5.0=py36_0
+- ca-certificates=2017.08.26=h1d4fec5_0
+- certifi=2018.1.18=py36_0
+- cycler=0.10.0=py36h93f1223_0
+- dbus=1.13.2=hc3f9b76_0
+- decorator=4.2.1=py36_0
+- expat=2.2.5=he0dffb1_0
+- fontconfig=2.12.6=h49f89f6_0
+- freetype=2.8=hab7d2ae_1
+- glib=2.53.6=h5d9569c_2
+- gst-plugins-base=1.12.4=h33fb286_0
+- gstreamer=1.12.4=hb53b477_0
+- html5lib=0.9999999=py36_0
+- icu=58.2=h9c2bf20_1
+- intel-openmp=2018.0.0=hc7b2577_8
+- ipykernel=4.8.2=py36_0
+- ipython=6.2.1=py36h88c514a_1
+- ipython_genutils=0.2.0=py36hb52b0d5_0
+- jedi=0.11.1=py36_0
+- jpeg=9b=h024ee3a_2
+- jupyter_client=5.2.2=py36_0
+- jupyter_core=4.4.0=py36h7c827e3_0
+- kiwisolver=1.0.1=py36h764f252_0
+- libedit=3.1=heed3624_0
+- libffi=3.2.1=hd88cf55_4
+- libgcc-ng=7.2.0=h7cc24e2_2
+- libgfortran-ng=7.2.0=h9f7466a_2
+- libpng=1.6.34=hb9fc6fc_0
+- libprotobuf=3.4.1=h5b8497f_0
+- libsodium=1.0.15=hf101ebd_0
+- libstdcxx-ng=7.2.0=h7a57d05_2
+- libxcb=1.13=h1bed415_0
+- libxml2=2.9.8=hf84eae3_0
+- markdown=2.6.9=py36_0
+- matplotlib=2.2.2=py36h0e671d2_1
+- mkl=2018.0.1=h19d6760_4
+- ncurses=6.0=h9df7e31_2
+- numpy=1.14.1=py36h3dfced4_1
+- openssl=1.0.2n=hb7f436b_0
+- pandas=0.22.0=py36hf484d3e_0
+- parso=0.1.1=py36h35f843b_0
+- pcre=8.41=hc27e229_1
+- pexpect=4.4.0=py36_0
+- pickleshare=0.7.4=py36h63277f8_0
+- pip=9.0.1=py36h6c6f9ce_4
+- prompt_toolkit=1.0.15=py36h17d85b1_0
+- protobuf=3.4.1=py36h306e679_0
+- ptyprocess=0.5.2=py36h69acd42_0
+- pygments=2.2.0=py36h0d3125c_0
+- pyparsing=2.2.0=py36hee85983_1
+- pyqt=5.9.2=py36h751905a_0
+- python=3.6.4=hc3d631a_1
+- python-dateutil=2.6.1=py36h88d3b88_1
+- pytz=2018.3=py36_0
+- pyzmq=16.0.3=py36he2533c7_0
+- qt=5.9.4=h4e5bff0_0
+- readline=7.0=ha6073c6_4
+- scipy=1.0.0=py36hbf646e7_0
+- setuptools=38.5.1=py36_0
+- simplegeneric=0.8.1=py36_2
+- sip=4.19.8=py36hf484d3e_0
+- six=1.11.0=py36h372c433_1
+- sqlite=3.22.0=h1bed415_0
+- tensorflow=1.4.1=0
+- tensorflow-base=1.4.1=py36hd00c003_2
+- tensorflow-tensorboard=0.4.0=py36hf484d3e_0
+- tk=8.6.7=hc745277_3
+- tornado=4.5.3=py36_0
+- tqdm=4.19.4=py36ha5a5176_0
+- traitlets=4.3.2=py36h674d592_0
+- wcwidth=0.1.7=py36hdf4376a_0
+- werkzeug=0.14.1=py36_0
+- wheel=0.30.0=py36hfd4bba0_1
+- xz=5.2.3=h55aa19d_2
+- zeromq=4.2.2=hbedb6e5_2
+- zlib=1.2.11=ha838bed_2
+- pip:
+  - audioread==2.1.5
+  - ipython-genutils==0.2.0
+  - joblib==0.11
+  - jupyter-client==5.2.2
+  - jupyter-core==4.4.0
+  - keras==2.1.5
+  - liac-arff==2.1.1
+  - librosa==0.6.0
+  - llvmlite==0.22.0
+  - numba==0.37.0
+  - prompt-toolkit==1.0.15
+  - pyyaml==3.12
+  - resampy==0.2.0
+  - scikit-learn==0.19.1
+prefix: /home/invincibleo/anaconda3/envs/py3SED
+

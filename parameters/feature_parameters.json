@@ -1,0 +1,41 @@
+{
+    "mel": {
+        "normalize_mel_bands": false, 
+        "window": "hamming_asymmetric", 
+        "fmin": 0, 
+        "n_fft": 2048, 
+        "fmax": 22050, 
+        "mono": true, 
+        "n_mels": 40, 
+        "htk": true, 
+        "spectrogram_type": "power", 
+        "log": true
+    }, 
+    "mfcc_acceleration": {
+        "width": 9, 
+        "dependency_method": "mfcc"
+    }, 
+    "mfcc": {
+        "n_fft": 2048, 
+        "fmax": 22050, 
+        "n_mels": 40, 
+        "htk": true, 
+        "n_mfcc": 20, 
+        "spectrogram_type": "power", 
+        "log": true, 
+        "mono": true, 
+        "normalize_mel_bands": false, 
+        "window": "hamming_asymmetric", 
+        "fmin": 0
+    }, 
+    "mfcc_delta": {
+        "width": 9, 
+        "dependency_method": "mfcc"
+    }, 
+    "general": {
+        "use_dnn_features": "True",
+        "hop_length_samples": 110, 
+        "fs": 44100, 
+        "win_length_samples": 220
+    }
+}
