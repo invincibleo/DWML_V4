@@ -1,7 +1,1 @@
-*.pyc
-*.npy
-*.iml
-*.xml
-tmp/
-test/test_Dataset_AVEC2016_single.py
-test/tmp/
+/test_output_dir
