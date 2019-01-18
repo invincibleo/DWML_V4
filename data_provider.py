@@ -4,21 +4,17 @@
 # @File    : data_provider.py
 # @Software: PyCharm
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 import tensorflow as tf
 import numpy as np
 from pathlib import Path
 
 import matplotlib
-
-matplotlib.use("TkAgg")
+matplotlib.use("TkAgg") # Add only for Mac to avoid crashing
 import matplotlib.pyplot as plt
 
 tf.enable_eager_execution()
-slim = tf.contrib.slim
 
 def parse_fn(example):
   "Parse TFExample records and perform simple data augmentation."
@@ -40,9 +36,9 @@ def parse_fn(example):
   raw_audio = tf.reshape(raw_audio, (-1, audio_shape))
   label = tf.reshape(label, (-1, label_shape))
 
-  return raw_audio, label
+  return {'features': raw_audio}, label
 
-def get_split(dataset_dir, is_training=True, split_name='train', batch_size=32,
+def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32,
               seq_length=100, debugging=False):
     """Returns a data split of the RECOLA dataset, which was saved in tfrecords format.
 
@@ -64,16 +60,17 @@ def get_split(dataset_dir, is_training=True, split_name='train', batch_size=32,
     dataset = filename_queue.interleave(tf.data.TFRecordDataset, cycle_length=1)
     dataset = dataset.map(map_func=parse_fn)
     dataset = dataset.batch(batch_size=seq_length)
-    dataset = dataset.map(lambda x, y: (tf.transpose(x, [1, 0, 2]), y))
+    dataset = dataset.map(lambda x, y: (dict(features=tf.transpose(x['features'], [1, 0, 2])), y))
+    dataset = dataset.repeat(100)
     dataset = dataset.batch(batch_size=batch_size)
-    dataset = dataset.prefetch(buffer_size=20000/seq_length/batch_size)
+    dataset = dataset.prefetch(buffer_size=5)
     if is_training:
-        dataset = dataset.shuffle(buffer_size=10000)
+        dataset = dataset.shuffle(buffer_size=300)
 
     return dataset
 
 # def main(dataset_dir):
-#     get_split(dataset_dir, is_training=True, split_name='train',
+#     get_dataset(dataset_dir, is_training=True, split_name='train',
 #               batch_size=32, seq_length=100, debugging=False)
 #
 # if __name__ == "__main__":

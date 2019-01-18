@@ -4,18 +4,24 @@
 # @File    : data_generator.py
 # @Software: PyCharm
 
+from __future__ import absolute_import, division, print_function
+
 import tensorflow as tf
 import numpy as np
 import os
 import librosa
 import arff
 import matplotlib
-matplotlib.use("TkAgg")
+matplotlib.use("TkAgg") # Add only for Mac to avoid crashing
 import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 from pathlib import Path
 
+tf.enable_eager_execution()
+
+print("TensorFlow version: {}".format(tf.__version__))
+print("Eager execution: {}".format(tf.executing_eagerly()))
 
 root_dir = Path("/Users/invincibleo/Box Sync/PhD/Experiment/Datasets/AVEC2016")
 
