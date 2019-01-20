@@ -13,6 +13,7 @@ import data_provider
 import losses
 from tensorflow import keras
 from pathlib import Path
+from tqdm import tqdm
 
 import matplotlib
 matplotlib.use("TkAgg") # Add only for Mac to avoid crashing
@@ -33,7 +34,7 @@ def train_input_fn():
                                         debugging=False)
 
     # Return the read end of the pipeline.
-    return dataset.make_one_shot_iterator().get_next()
+    return dataset.make_initializable_iterator() #.get_next() # make_one_shot_iterator
 
 def dev_input_fn():
     dataset_dir = "./test_output_dir/tf_records"
@@ -45,12 +46,20 @@ def dev_input_fn():
                                         debugging=False)
 
     # Return the read end of the pipeline.
-    return dataset.make_one_shot_iterator().get_next()
+    return dataset.make_initializable_iterator() #.get_next()  # make_one_shot_iterator
 
-def my_model(audio_frames=None, hidden_units=256, seq_length=2, num_features=640, number_of_outputs=2, is_training=False):
+def my_model(audio_frames=None,
+             audio_frames_dev=None,
+             hidden_units=256,
+             seq_length=2,
+             num_features=640,
+             number_of_outputs=2,
+             is_training=False):
 
     # batch_size, _, seq_length, num_features = audio_frames.get_shape().as_list()
-    audio_input = tf.reshape(audio_frames, [-1, 1, 640, 1]) # -1 -> batch_size*seq_length
+    audio_input = tf.cond(is_training,
+                          lambda: tf.reshape(audio_frames, [-1, 1, 640, 1]),
+                          lambda: tf.reshape(audio_frames_dev, [-1, 1, 640, 1]))# -1 -> batch_size*seq_length
 
     # All conv2d should be SAME padding
     net = tf.layers.dropout(audio_input,
@@ -136,19 +145,26 @@ def my_model(audio_frames=None, hidden_units=256, seq_length=2, num_features=640
 def train(dir):
     g = tf.Graph()
     with g.as_default():
-        features, ground_truth = train_input_fn()
+        train_iter = train_input_fn()
+        features, ground_truth = train_iter.get_next() #train_input_fn()
         ground_truth = tf.squeeze(ground_truth, 2)
 
-        prediction = my_model(audio_frames=features['features'], hidden_units=256, number_of_outputs=2, is_training=True)
+        dev_iter = dev_input_fn()
+        features_dev, ground_truth_dev = dev_iter.get_next()#dev_input_fn()
+        ground_truth_dev = tf.squeeze(ground_truth_dev, 2)
 
-        # features_dev, ground_truth_dev = dev_input_fn()
-        # ground_truth_dev = tf.squeeze(ground_truth_dev, 2)
-        # prediction_dev = my_model(features_dev['features'])
+        is_training = tf.placeholder(tf.bool, shape=())
+
+        prediction = my_model(audio_frames=features['features'],
+                              audio_frames_dev=features_dev['features'],
+                              hidden_units=256,
+                              number_of_outputs=2,
+                              is_training=is_training)
 
         # Define the loss function
         for i, name in enumerate(['arousal', 'valence']):
             pred_single = tf.reshape(prediction[:, :, i], (-1,))
-            gt_single = tf.reshape(ground_truth[:, :, i], (-1,))
+            gt_single = tf.reshape(ground_truth[:, :, i], (-1,)) # ground_truth
 
             loss = losses.concordance_cc(pred_single, gt_single)
             tf.Print(loss, [tf.shape(loss)], 'shape(loss) = ', first_n=2)
@@ -159,7 +175,7 @@ def train(dir):
 
             tf.losses.add_loss(loss / 2.)
 
-        aa = tf.get_collection(tf.GraphKeys.LOSSES)
+        # aa = tf.get_collection(tf.GraphKeys.LOSSES)
         total_loss = tf.losses.get_total_loss()
         # tf.summary.scalar('losses/total loss', total_loss)
 
@@ -171,15 +187,54 @@ def train(dir):
         optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
         train = optimizer.minimize(total_loss)
 
-        init = tf.global_variables_initializer()
-
+        # init = tf.global_variables_initializer()
+        epochs = 10
         with tf.Session(graph=g) as sess:
-            sess.run(init)
-            for i in range(100):
-                _, loss_value = sess.run((train, total_loss))
-                print(loss_value)
+            sess.run(tf.global_variables_initializer())
 
-            # print(sess.run(total_loss_dev))
+            for epoch_no in range(epochs):
+                train_loss, train_accuracy = 0, 0
+                val_loss, val_accuracy = 0, 0
+
+                # Initialize iterator with training data
+                sess.run(train_iter.initializer)
+                sess.run(dev_iter.initializer)
+
+                try:
+                    with tqdm(total=7500*9) as pbar:
+                        while True:
+                            _, loss = sess.run((train, total_loss), feed_dict={is_training: True})
+                            train_loss += loss
+                            # train_accuracy += acc
+                            pbar.update(32*2)
+                except tf.errors.OutOfRangeError:
+                    print('Training loss: {}'.format(total_loss))
+                    pass
+
+                # Initialize iterator with validation data
+                try:
+                    while True:
+                        loss = sess.run(total_loss, feed_dict={is_training: False})
+                        val_loss += loss
+                        # val_accuracy += acc
+                except tf.errors.OutOfRangeError:
+                    print('Validation loss: {}'.format(val_loss))
+                    pass
+
+                print('\nEpoch No: {}'.format(epoch_no + 1))
+                # print('Train accuracy = {:.4f}, loss = {:.4f}'.format(train_accuracy / len(y_train),
+                #                                                       train_loss / len(y_train)))
+                # print('Val accuracy = {:.4f}, loss = {:.4f}'.format(val_accuracy / len(y_val),
+                #                                                     val_loss / len(y_val)))
+
+
+        # with tf.Session(graph=g) as sess:
+        #     sess.run(init)
+        #     for i in range(10):
+        #         _, loss_value = sess.run((train, total_loss))
+        #         print(loss_value)
+        #
+        #     print('validation loss: {}'.format(sess.run(features_dev)))
 
     # # Loop forever, alternating between training and validation.
     # while True:
