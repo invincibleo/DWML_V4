@@ -208,7 +208,7 @@ def train(dir):
                             # train_accuracy += acc
                             pbar.update(32*2)
                 except tf.errors.OutOfRangeError:
-                    print('Training loss: {}'.format(total_loss))
+                    print('Training loss: {}'.format(train_loss))
                     pass
 
                 # Initialize iterator with validation data
@@ -222,32 +222,6 @@ def train(dir):
                     pass
 
                 print('\nEpoch No: {}'.format(epoch_no + 1))
-                # print('Train accuracy = {:.4f}, loss = {:.4f}'.format(train_accuracy / len(y_train),
-                #                                                       train_loss / len(y_train)))
-                # print('Val accuracy = {:.4f}, loss = {:.4f}'.format(val_accuracy / len(y_val),
-                #                                                     val_loss / len(y_val)))
-
-
-        # with tf.Session(graph=g) as sess:
-        #     sess.run(init)
-        #     for i in range(10):
-        #         _, loss_value = sess.run((train, total_loss))
-        #         print(loss_value)
-        #
-        #     print('validation loss: {}'.format(sess.run(features_dev)))
-
-    # # Loop forever, alternating between training and validation.
-    # while True:
-    #     # Run 200 steps using the training dataset. Note that the training dataset is
-    #     # infinite, and we resume from where we left off in the previous `while` loop
-    #     # iteration.
-    #     for _ in range(200):
-    #         sess.run(next_element, feed_dict={handle: training_handle})
-    #
-    #     # Run one pass over the validation dataset.
-    #     sess.run(validation_iterator.initializer)
-    #     for _ in range(50):
-    #         sess.run(next_element, feed_dict={handle: validation_handle})
 
 
 if __name__ == "__main__":
