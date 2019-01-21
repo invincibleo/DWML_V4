@@ -14,6 +14,7 @@ import os
 import tensorflow as tf
 import data_provider
 import losses
+import numpy as np
 from tensorflow import keras
 from pathlib import Path
 from tqdm import tqdm
@@ -125,7 +126,7 @@ def my_model(audio_frames=None,
     prediction = tf.layers.dense(net,
                                  number_of_outputs,
                                  activation=None)
-
+    tf.summary.histogram('activations', prediction)
     return tf.reshape(prediction, (-1, seq_length, number_of_outputs))
 
 def train(dataset_dir=None,
@@ -136,6 +137,9 @@ def train(dataset_dir=None,
           epochs=10,
           ):
     total_num = 7500 * 9
+    loss_list = np.zeros((1, epochs))
+    dev_loss_list = np.zeros((1, epochs))
+
     g = tf.Graph()
     with g.as_default():
         # Define the datasets
@@ -171,7 +175,7 @@ def train(dataset_dir=None,
 
             loss = losses.concordance_cc(pred_single, gt_single)
             tf.Print(loss, [tf.shape(loss)], 'shape(loss) = ', first_n=2)
-            # tf.summary.scalar('losses/{} loss'.format(name), loss)
+            tf.summary.scalar('{}losses/{} loss'.format(tf.cond(is_training, lambda: 'train', lambda: 'valid'), name), loss)
 
             mse = tf.reduce_mean(tf.square(pred_single - gt_single))
             # tf.summary.scalar('losses/mse {} loss'.format(name), mse)
@@ -180,18 +184,15 @@ def train(dataset_dir=None,
 
         # aa = tf.get_collection(tf.GraphKeys.LOSSES)
         total_loss = tf.losses.get_total_loss()
-        # tf.summary.scalar('losses/total loss', total_loss)
-
-        # pred_single_dev = tf.reshape(prediction_dev[:, :, 0], (-1,))
-        # gt_single_dev = tf.reshape(ground_truth_dev[:, :, 0], (-1,))
-
-        # total_loss_dev = losses.concordance_cc(pred_single_dev, gt_single_dev)
+        tf.summary.scalar('losses/total loss', total_loss)
 
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
         train = optimizer.minimize(total_loss)
 
-        # init = tf.global_variables_initializer()
         with tf.Session(graph=g) as sess:
+            merged = tf.summary.merge_all()
+            train_writer = tf.summary.FileWriter('./log', sess.graph)
+
             sess.run(tf.global_variables_initializer())
 
             for epoch_no in range(epochs):
@@ -206,12 +207,14 @@ def train(dataset_dir=None,
                     sess.run(training_init_op)
                     with tqdm(total=int(total_num/seq_length)+1, desc='Training') as pbar:
                         while True:
-                            _, loss = sess.run((train, total_loss), feed_dict={is_training: True})
+                            _, loss, summary = sess.run((train, total_loss, merged), feed_dict={is_training: True})
                             train_loss += loss
+                            loss_list[1, epoch_no] = loss
                             pbar.update(batch_size)
                 except tf.errors.OutOfRangeError:
                     train_loss /= total_num/seq_length
                     print('Training loss: {}'.format(train_loss))
+                    train_writer.add_summary(summary, epoch_no)
                     pass
 
                 # Initialize iterator with validation data
@@ -219,17 +222,25 @@ def train(dataset_dir=None,
                     sess.run(dev_init_op)
                     with tqdm(total=int(total_num/seq_length)+1, desc='Validation') as pbar_dev:
                         while True:
-                            loss = sess.run(total_loss, feed_dict={is_training: False})
+                            loss, summary = sess.run((total_loss, merged), feed_dict={is_training: False})
                             val_loss += loss
+                            dev_loss_list[1, epoch_no] = loss
                             pbar_dev.update(batch_size)
                 except tf.errors.OutOfRangeError:
                     val_loss /= total_num/seq_length
                     print('\nEpoch: {}\nTraining loss: {}\nValidation loss: {}'.format(epoch_no, train_loss, val_loss))
+                    train_writer.add_summary(summary, epoch_no)
                     pass
+    return loss_list, dev_loss_list
+
 
 if __name__ == "__main__":
-    train(Path("./test_output_dir/tf_records"),
-          seq_length=100,
-          batch_size=32,
-          num_features=640,
-          epochs=10)
+    loss_list, dev_loss_list = train(Path("./test_output_dir/tf_records"),
+                                     seq_length=100,
+                                     batch_size=32,
+                                     num_features=640,
+                                     epochs=10)
+    print(str(loss_list))
+    print('\n')
+    print(str(dev_loss_list))
+
