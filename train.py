@@ -28,7 +28,6 @@ print("TensorFlow version: {}".format(tf.__version__))
 print("Eager execution: {}".format(tf.executing_eagerly()))
 
 def input_fn(dataset_dir, split_name=None, batch_size=32, seq_length=2):
-    dataset_dir = "./test_output_dir/tf_records"
     dataset = data_provider.get_dataset(dataset_dir,
                                         is_training=True,
                                         split_name=split_name,
@@ -205,28 +204,32 @@ def train(dataset_dir=None,
                 dev_init_op = iterator.make_initializer(dev_ds)
                 try:
                     sess.run(training_init_op)
-                    with tqdm(total=int(total_num/seq_length%batch_size)+1, desc='Training') as pbar:
+                    with tqdm(total=int(total_num/seq_length)+1, desc='Training') as pbar:
                         while True:
                             _, loss = sess.run((train, total_loss), feed_dict={is_training: True})
                             train_loss += loss
-                            pbar.update(batch_size*seq_length)
+                            pbar.update(batch_size)
                 except tf.errors.OutOfRangeError:
-                    train_loss /= int(total_num/seq_length/batch_size)+1
+                    train_loss /= total_num/seq_length
                     print('Training loss: {}'.format(train_loss))
                     pass
 
                 # Initialize iterator with validation data
                 try:
                     sess.run(dev_init_op)
-                    with tqdm(total=int(total_num/seq_length%batch_size)+1, desc='Validation') as pbar_dev:
+                    with tqdm(total=int(total_num/seq_length)+1, desc='Validation') as pbar_dev:
                         while True:
                             loss = sess.run(total_loss, feed_dict={is_training: False})
                             val_loss += loss
-                            pbar_dev.update(batch_size*seq_length)
+                            pbar_dev.update(batch_size)
                 except tf.errors.OutOfRangeError:
-                    val_loss /= int(total_num/seq_length/batch_size)+1
-                    print('Epoch: {}\nTraining loss: {}\nValidation loss: {}'.format(epoch_no, train_loss, val_loss))
+                    val_loss /= total_num/seq_length
+                    print('\nEpoch: {}\nTraining loss: {}\nValidation loss: {}'.format(epoch_no, train_loss, val_loss))
                     pass
 
 if __name__ == "__main__":
-  train(Path("./test_output_dir/tf_records"))
+    train(Path("./test_output_dir/tf_records"),
+          seq_length=100,
+          batch_size=32,
+          num_features=640,
+          epochs=10)

@@ -63,7 +63,7 @@ def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32
     dataset = dataset.map(lambda x, y: (dict(features=tf.transpose(x['features'], [1, 0, 2])), y))
     # dataset = dataset.repeat(100)
     dataset = dataset.batch(batch_size=batch_size)
-    dataset = dataset.prefetch(buffer_size=5)
+    dataset = dataset.prefetch(buffer_size=10000)
     if is_training:
         dataset = dataset.shuffle(buffer_size=300)
 
