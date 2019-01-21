@@ -4,6 +4,9 @@
 # @File    : train
 # @Software: PyCharm
 
+# Reference and tutorial
+# How to do training and validation alternatively https://zhuanlan.zhihu.com/p/43356309
+
 from __future__ import absolute_import, division, print_function
 
 import os
@@ -24,42 +27,26 @@ tf.enable_eager_execution()
 print("TensorFlow version: {}".format(tf.__version__))
 print("Eager execution: {}".format(tf.executing_eagerly()))
 
-def train_input_fn():
+def input_fn(dataset_dir, split_name=None, batch_size=32, seq_length=2):
     dataset_dir = "./test_output_dir/tf_records"
     dataset = data_provider.get_dataset(dataset_dir,
                                         is_training=True,
-                                        split_name='train',
-                                        batch_size=32,
-                                        seq_length=2,
+                                        split_name=split_name,
+                                        batch_size=batch_size,
+                                        seq_length=seq_length,
                                         debugging=False)
 
     # Return the read end of the pipeline.
-    return dataset.make_initializable_iterator() #.get_next() # make_one_shot_iterator
-
-def dev_input_fn():
-    dataset_dir = "./test_output_dir/tf_records"
-    dataset = data_provider.get_dataset(dataset_dir,
-                                        is_training=True,
-                                        split_name='valid',
-                                        batch_size=32,
-                                        seq_length=2,
-                                        debugging=False)
-
-    # Return the read end of the pipeline.
-    return dataset.make_initializable_iterator() #.get_next()  # make_one_shot_iterator
+    return dataset #.make_initializable_iterator() #.get_next() # make_one_shot_iterator
 
 def my_model(audio_frames=None,
-             audio_frames_dev=None,
              hidden_units=256,
              seq_length=2,
              num_features=640,
              number_of_outputs=2,
              is_training=False):
 
-    # batch_size, _, seq_length, num_features = audio_frames.get_shape().as_list()
-    audio_input = tf.cond(is_training,
-                          lambda: tf.reshape(audio_frames, [-1, 1, 640, 1]),
-                          lambda: tf.reshape(audio_frames_dev, [-1, 1, 640, 1]))# -1 -> batch_size*seq_length
+    audio_input = tf.reshape(audio_frames['features'], [-1, 1, 640, 1])
 
     # All conv2d should be SAME padding
     net = tf.layers.dropout(audio_input,
@@ -142,22 +129,39 @@ def my_model(audio_frames=None,
 
     return tf.reshape(prediction, (-1, seq_length, number_of_outputs))
 
-def train(dir):
+def train(dataset_dir=None,
+          learning_rate=0.001,
+          batch_size=32,
+          seq_length=2,
+          num_features=640,
+          epochs=10,
+          ):
+    total_num = 7500 * 9
     g = tf.Graph()
     with g.as_default():
-        train_iter = train_input_fn()
-        features, ground_truth = train_iter.get_next() #train_input_fn()
-        ground_truth = tf.squeeze(ground_truth, 2)
+        # Define the datasets
+        train_ds = input_fn(dataset_dir,
+                            batch_size=batch_size,
+                            seq_length=seq_length,
+                            split_name='train')
+        dev_ds = input_fn(dataset_dir,
+                          batch_size=batch_size,
+                          seq_length=seq_length,
+                          split_name='valid')
 
-        dev_iter = dev_input_fn()
-        features_dev, ground_truth_dev = dev_iter.get_next()#dev_input_fn()
-        ground_truth_dev = tf.squeeze(ground_truth_dev, 2)
+        # Make the iterator
+        iterator = tf.data.Iterator.from_structure(train_ds.output_types,
+                                                   dev_ds.output_shapes)
+
+        features, ground_truth = iterator.get_next() #train_input_fn()
+        ground_truth = tf.squeeze(ground_truth, 2)
 
         is_training = tf.placeholder(tf.bool, shape=())
 
-        prediction = my_model(audio_frames=features['features'],
-                              audio_frames_dev=features_dev['features'],
+        prediction = my_model(audio_frames=features,
                               hidden_units=256,
+                              seq_length=seq_length,
+                              num_features=num_features,
                               number_of_outputs=2,
                               is_training=is_training)
 
@@ -184,45 +188,46 @@ def train(dir):
 
         # total_loss_dev = losses.concordance_cc(pred_single_dev, gt_single_dev)
 
-        optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
+        optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
         train = optimizer.minimize(total_loss)
 
         # init = tf.global_variables_initializer()
-        epochs = 10
         with tf.Session(graph=g) as sess:
             sess.run(tf.global_variables_initializer())
 
             for epoch_no in range(epochs):
+                print("Epoch: {}".format(epoch_no))
                 train_loss, train_accuracy = 0, 0
                 val_loss, val_accuracy = 0, 0
 
-                # Initialize iterator with training data
-                sess.run(train_iter.initializer)
-                sess.run(dev_iter.initializer)
-
+                # Initialize the iterator with different dataset
+                training_init_op = iterator.make_initializer(train_ds)
+                dev_init_op = iterator.make_initializer(dev_ds)
                 try:
-                    with tqdm(total=7500*9) as pbar:
+                    sess.run(training_init_op)
+                    with tqdm(total=int(total_num/seq_length%batch_size)+1, desc='Training') as pbar:
                         while True:
                             _, loss = sess.run((train, total_loss), feed_dict={is_training: True})
                             train_loss += loss
-                            # train_accuracy += acc
-                            pbar.update(32*2)
+                            pbar.update(batch_size*seq_length)
                 except tf.errors.OutOfRangeError:
-                    print('Training loss: {}'.format(train_loss))
+                    print('Training loss: {}'.format(train_loss/int(total_num/seq_length/batch_size)+1))
                     pass
 
                 # Initialize iterator with validation data
                 try:
-                    while True:
-                        loss = sess.run(total_loss, feed_dict={is_training: False})
-                        val_loss += loss
-                        # val_accuracy += acc
+                    sess.run(dev_init_op)
+                    with tqdm(total=int(total_num/seq_length%batch_size)+1, desc='Validation') as pbar_dev:
+                        while True:
+                            loss = sess.run(total_loss, feed_dict={is_training: False})
+                            val_loss += loss
+                            pbar_dev.update(batch_size*seq_length)
                 except tf.errors.OutOfRangeError:
-                    print('Validation loss: {}'.format(val_loss))
+                    print('Validation loss: {}'.format(val_loss/int(total_num/seq_length/batch_size)+1))
                     pass
 
                 print('\nEpoch No: {}'.format(epoch_no + 1))
 
 
 if __name__ == "__main__":
-  train(Path("./test_output_dir"))
+  train(Path("./test_output_dir/tf_records"))

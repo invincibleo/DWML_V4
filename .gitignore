@@ -1,3 +1,4 @@
 /test_output_dir
 /.idea
 /logs
+.DS_Store
