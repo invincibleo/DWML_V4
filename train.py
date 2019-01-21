@@ -14,6 +14,7 @@ import os
 import tensorflow as tf
 import data_provider
 import losses
+import metrics
 import numpy as np
 from tensorflow import keras
 from pathlib import Path
@@ -192,13 +193,14 @@ def train(dataset_dir=None,
         with tf.Session(graph=g) as sess:
             merged = tf.summary.merge_all()
             train_writer = tf.summary.FileWriter('./log', sess.graph)
+            modal_saver = tf.train.Saver()
 
             sess.run(tf.global_variables_initializer())
 
             for epoch_no in range(epochs):
                 print('\nEpoch No: {}'.format(epoch_no))
-                train_loss, train_accuracy = 0, 0
-                val_loss, val_accuracy = 0, 0
+                train_loss, val_loss = 0, 0
+                count_num_train, count_num_dev = 0, 0
 
                 # Initialize the iterator with different dataset
                 training_init_op = iterator.make_initializer(train_ds)
@@ -211,8 +213,10 @@ def train(dataset_dir=None,
                             train_loss += loss
                             loss_list[:, epoch_no] = loss
                             pbar.update(batch_size)
+                            count_num_train += 1
+                            # print('\n train loss: {}'.format(loss))
                 except tf.errors.OutOfRangeError:
-                    train_loss /= total_num/seq_length
+                    train_loss /= count_num_train
                     print('Training loss: {}'.format(train_loss))
                     train_writer.add_summary(summary, epoch_no)
                     pass
@@ -226,11 +230,17 @@ def train(dataset_dir=None,
                             val_loss += loss
                             dev_loss_list[:, epoch_no] = loss
                             pbar_dev.update(batch_size)
+                            count_num_dev += 1
+                            # print('\n val loss: {}'.format(loss))
                 except tf.errors.OutOfRangeError:
-                    val_loss /= total_num/seq_length
+                    val_loss /= count_num_dev
                     print('\nEpoch: {}\nTraining loss: {}\nValidation loss: {}'.format(epoch_no, train_loss, val_loss))
                     train_writer.add_summary(summary, epoch_no)
                     pass
+
+            # Save the model
+            save_path = modal_saver.save(sess, "/tmp/model.ckpt")
+            print("Model saved in path: %s" % save_path)
     return loss_list, dev_loss_list
 
 
