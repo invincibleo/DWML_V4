@@ -209,7 +209,7 @@ def train(dataset_dir=None,
                         while True:
                             _, loss, summary = sess.run((train, total_loss, merged), feed_dict={is_training: True})
                             train_loss += loss
-                            loss_list[1, epoch_no] = loss
+                            loss_list[:, epoch_no] = loss
                             pbar.update(batch_size)
                 except tf.errors.OutOfRangeError:
                     train_loss /= total_num/seq_length
@@ -224,7 +224,7 @@ def train(dataset_dir=None,
                         while True:
                             loss, summary = sess.run((total_loss, merged), feed_dict={is_training: False})
                             val_loss += loss
-                            dev_loss_list[1, epoch_no] = loss
+                            dev_loss_list[:, epoch_no] = loss
                             pbar_dev.update(batch_size)
                 except tf.errors.OutOfRangeError:
                     val_loss /= total_num/seq_length
