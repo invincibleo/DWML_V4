@@ -196,7 +196,7 @@ def train(dataset_dir=None,
             sess.run(tf.global_variables_initializer())
 
             for epoch_no in range(epochs):
-                print("Epoch: {}".format(epoch_no))
+                print('\nEpoch No: {}'.format(epoch_no))
                 train_loss, train_accuracy = 0, 0
                 val_loss, val_accuracy = 0, 0
 
@@ -211,7 +211,8 @@ def train(dataset_dir=None,
                             train_loss += loss
                             pbar.update(batch_size*seq_length)
                 except tf.errors.OutOfRangeError:
-                    print('Training loss: {}'.format(train_loss/int(total_num/seq_length/batch_size)+1))
+                    train_loss /= int(total_num/seq_length/batch_size)+1
+                    print('Training loss: {}'.format(train_loss))
                     pass
 
                 # Initialize iterator with validation data
@@ -223,11 +224,9 @@ def train(dataset_dir=None,
                             val_loss += loss
                             pbar_dev.update(batch_size*seq_length)
                 except tf.errors.OutOfRangeError:
-                    print('Validation loss: {}'.format(val_loss/int(total_num/seq_length/batch_size)+1))
+                    val_loss /= int(total_num/seq_length/batch_size)+1
+                    print('Epoch: {}\nTraining loss: {}\nValidation loss: {}'.format(epoch_no, train_loss, val_loss))
                     pass
-
-                print('\nEpoch No: {}'.format(epoch_no + 1))
-
 
 if __name__ == "__main__":
   train(Path("./test_output_dir/tf_records"))
