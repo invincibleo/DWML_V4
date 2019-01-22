@@ -29,9 +29,10 @@ tf.enable_eager_execution()
 print("TensorFlow version: {}".format(tf.__version__))
 print("Eager execution: {}".format(tf.executing_eagerly()))
 
-def input_fn(dataset_dir, split_name=None, batch_size=32, seq_length=2):
+
+def input_fn(dataset_dir, is_training=True, split_name=None, batch_size=32, seq_length=2):
     dataset = data_provider.get_dataset(dataset_dir,
-                                        is_training=True,
+                                        is_training=is_training,
                                         split_name=split_name,
                                         batch_size=batch_size,
                                         seq_length=seq_length,
@@ -39,6 +40,7 @@ def input_fn(dataset_dir, split_name=None, batch_size=32, seq_length=2):
 
     # Return the read end of the pipeline.
     return dataset #.make_initializable_iterator() #.get_next() # make_one_shot_iterator
+
 
 def my_model(audio_frames=None,
              hidden_units=256,
@@ -130,6 +132,7 @@ def my_model(audio_frames=None,
     tf.summary.histogram('activations', prediction)
     return tf.reshape(prediction, (-1, seq_length, number_of_outputs))
 
+
 def train(dataset_dir=None,
           learning_rate=0.001,
           batch_size=32,
@@ -145,11 +148,15 @@ def train(dataset_dir=None,
     with g.as_default():
         # Define the datasets
         train_ds = input_fn(dataset_dir,
+                            is_training=True,
                             batch_size=batch_size,
                             seq_length=seq_length,
                             split_name='train')
+
+        # Pay attension that the validation set should be evaluate file-wise
         dev_ds = input_fn(dataset_dir,
-                          batch_size=batch_size,
+                          is_training=False,
+                          batch_size=int(7500/seq_length),
                           seq_length=seq_length,
                           split_name='valid')
 
@@ -157,10 +164,10 @@ def train(dataset_dir=None,
         iterator = tf.data.Iterator.from_structure(train_ds.output_types,
                                                    dev_ds.output_shapes)
 
+        is_training = tf.placeholder(tf.bool, shape=())
+
         features, ground_truth = iterator.get_next() #train_input_fn()
         ground_truth = tf.squeeze(ground_truth, 2)
-
-        is_training = tf.placeholder(tf.bool, shape=())
 
         prediction = my_model(audio_frames=features,
                               hidden_units=256,
@@ -172,7 +179,7 @@ def train(dataset_dir=None,
         # Define the loss function
         for i, name in enumerate(['arousal', 'valence']):
             pred_single = tf.reshape(prediction[:, :, i], (-1,))
-            gt_single = tf.reshape(ground_truth[:, :, i], (-1,)) # ground_truth
+            gt_single = tf.reshape(ground_truth[:, :, i], (-1,))  # ground_truth
 
             loss = losses.concordance_cc(pred_single, gt_single)
             tf.Print(loss, [tf.shape(loss)], 'shape(loss) = ', first_n=2)
@@ -229,7 +236,7 @@ def train(dataset_dir=None,
                             loss, summary = sess.run((total_loss, merged), feed_dict={is_training: False})
                             val_loss += loss
                             dev_loss_list[:, epoch_no] = loss
-                            pbar_dev.update(batch_size)
+                            pbar_dev.update(int(7500/seq_length))
                             count_num_dev += 1
                             # print('\n val loss: {}'.format(loss))
                 except tf.errors.OutOfRangeError:
