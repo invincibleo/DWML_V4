@@ -1,13 +1,11 @@
 import tensorflow as tf
 
-
 # def covariance(vec1, vec2):
 #     mean_vec1 = tf.metrics.mean(vec1)
 #     mean_vec2 = tf.metrics.mean(vec2)
 #     cov_vec1_vec2 = tf.metrics.mean((vec1 - mean_vec1)(vec2 - mean_vec2))
 #     return cov_vec1_vec2
 #
-
 def concordance_cc2(prediction, ground_truth):
     """Defines concordance metric for model evaluation. 
 
@@ -36,10 +34,11 @@ def concordance_cc2(prediction, ground_truth):
         var_lab = metrics['eval/cov_lab']
         var_lab_pred = metrics['eval/cov_lab_pred']
 
-        # mean_pred = tf.Print(mean_pred, [names_to_values['eval/mean_pred'], slim.metrics.streaming_mean(prediction[:]), tf.reduce_mean(prediction)], 'Debug_: mean_pred_value:')
-
         denominator = (var_pred + var_lab + tf.square(mean_pred - mean_lab))
 
         concordance_cc2 = (2 * var_lab_pred) / denominator
+
+        # concordance_cc2 = tf.Print(concordance_cc2, [tf.shape(concordance_cc2), tf.shape(prediction), tf.shape(ground_truth)], 'Debug_: mean_pred_value:')
+        # tf.print("Debug:", tf.shape(concordance_cc2), output_stream=sys.stdout)
 
     return concordance_cc2, names_to_values, [x for x in names_to_updates.values()]

@@ -9,8 +9,7 @@
 
 from __future__ import absolute_import, division, print_function
 
-import os
-
+import sys
 import tensorflow as tf
 import data_provider
 import losses
@@ -177,18 +176,23 @@ def train(dataset_dir=None,
                               is_training=is_training)
 
         # Define the loss function
+        concordance_cc2_list = []
+        names_to_updates_list = []
         for i, name in enumerate(['arousal', 'valence']):
             pred_single = tf.reshape(prediction[:, :, i], (-1,))
             gt_single = tf.reshape(ground_truth[:, :, i], (-1,))  # ground_truth
 
             loss = losses.concordance_cc(pred_single, gt_single)
-            tf.Print(loss, [tf.shape(loss)], 'shape(loss) = ', first_n=2)
             tf.summary.scalar('{}losses/{} loss'.format(tf.cond(is_training, lambda: 'train', lambda: 'valid'), name), loss)
 
             mse = tf.reduce_mean(tf.square(pred_single - gt_single))
             # tf.summary.scalar('losses/mse {} loss'.format(name), mse)
 
             tf.losses.add_loss(loss / 2.)
+
+            concordance_cc2, _, names_to_updates = metrics.concordance_cc2(pred_single, gt_single)
+            concordance_cc2_list.append(concordance_cc2)
+            names_to_updates_list.append(names_to_updates)
 
         # aa = tf.get_collection(tf.GraphKeys.LOSSES)
         total_loss = tf.losses.get_total_loss()
@@ -197,7 +201,6 @@ def train(dataset_dir=None,
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
         train = optimizer.minimize(total_loss)
 
-        concordance_cc2, names_to_values, names_to_updates = metrics.concordance_cc2(prediction, ground_truth)
         metrics_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="my_metrics")
         metrics_vars_initializer = tf.variables_initializer(var_list=metrics_vars)
 
@@ -208,11 +211,9 @@ def train(dataset_dir=None,
 
             sess.run(tf.global_variables_initializer())
             sess.run(metrics_vars_initializer)
-
             for epoch_no in range(epochs):
                 print('\nEpoch No: {}'.format(epoch_no))
                 train_loss, val_loss = 0.0, 0.0
-                train_ccc, val_ccc = 0.0, 0.0
                 count_num_train, count_num_dev = 0, 0
 
                 # Initialize the iterator with different dataset
@@ -222,7 +223,12 @@ def train(dataset_dir=None,
                     sess.run(training_init_op)
                     with tqdm(total=int(total_num/seq_length), desc='Training') as pbar:
                         while True:
-                            _, loss, summary, _ = sess.run((train, total_loss, merged, names_to_updates), feed_dict={is_training: True})
+                            _, loss, summary, _, _ = sess.run((train,
+                                                               total_loss,
+                                                               merged,
+                                                               names_to_updates_list[0],
+                                                               names_to_updates_list[1]),
+                                                              feed_dict={is_training: True})
                             train_loss += loss
                             loss_list[epoch_no, count_num_train] = loss
                             pbar.update(batch_size)
@@ -230,9 +236,12 @@ def train(dataset_dir=None,
                             # print('\n train loss: {}'.format(loss))
                 except tf.errors.OutOfRangeError:
                     train_loss /= count_num_train
-                    train_ccc = sess.run(concordance_cc2)
+                    train_ccc_arousal = sess.run(concordance_cc2_list[0])
+                    train_ccc_valence = sess.run(concordance_cc2_list[1])
                     sess.run(metrics_vars_initializer)
-                    print('Training loss: {}\n Training CCC: {}'.format(train_loss, train_ccc))
+                    print('Training loss: {}\n'
+                          'Training arousal CCC: {}\n'
+                          'Training valence CCC: {}'.format(train_loss, train_ccc_arousal, train_ccc_valence))
                     train_writer.add_summary(summary, epoch_no)
 
                 # Initialize iterator with validation data
@@ -240,7 +249,11 @@ def train(dataset_dir=None,
                     sess.run(dev_init_op)
                     with tqdm(total=int(total_num/seq_length), desc='Validation') as pbar_dev:
                         while True:
-                            loss, summary, _ = sess.run((total_loss, merged, names_to_updates), feed_dict={is_training: False})
+                            loss, summary, _, _ = sess.run((total_loss,
+                                                            merged,
+                                                            names_to_updates_list[0],
+                                                            names_to_updates_list[1]),
+                                                           feed_dict={is_training: False})
                             val_loss += loss
                             dev_loss_list[epoch_no, count_num_dev] = loss
                             pbar_dev.update(int(7500/seq_length))
@@ -248,11 +261,16 @@ def train(dataset_dir=None,
                             # print('\n val loss: {}'.format(loss))
                 except tf.errors.OutOfRangeError:
                     val_loss /= count_num_dev
-                    val_ccc = sess.run(concordance_cc2)
+                    val_ccc_arousal = sess.run(concordance_cc2_list[0])
+                    val_ccc_valence = sess.run(concordance_cc2_list[1])
                     sess.run(metrics_vars_initializer)
                     print('\nEpoch: {}'.format(epoch_no))
-                    print('\nTraining loss: {}, Training CCC: {}'.format(train_loss, train_ccc))
-                    print('\nValidation loss: {}, Validation CCC: {}'.format(val_loss, val_ccc))
+                    print('Training loss: {},'
+                          ' Training arousal CCC: {},'
+                          ' Training valence CCC: {}'.format(train_loss, train_ccc_arousal, train_ccc_valence))
+                    print('Validation loss: {},'
+                          ' Validation arousal CCC: {},'
+                          ' Training valence CCC: {}'.format(val_loss, val_ccc_arousal, val_ccc_valence))
                     train_writer.add_summary(summary, epoch_no)
 
             # Save the model
