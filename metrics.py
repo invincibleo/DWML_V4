@@ -1,7 +1,12 @@
 import tensorflow as tf
 
 
-slim = tf.contrib.slim
+# def covariance(vec1, vec2):
+#     mean_vec1 = tf.metrics.mean(vec1)
+#     mean_vec2 = tf.metrics.mean(vec2)
+#     cov_vec1_vec2 = tf.metrics.mean((vec1 - mean_vec1)(vec2 - mean_vec2))
+#     return cov_vec1_vec2
+#
 
 def concordance_cc2(prediction, ground_truth):
     """Defines concordance metric for model evaluation. 
@@ -12,29 +17,29 @@ def concordance_cc2(prediction, ground_truth):
     Returns:
        The concordance value.
     """
-    #### modified, swaped the positions of updates and values
-    names_to_updates, names_to_values = slim.metrics.aggregate_metric_map({
-        'eval/mean_pred':slim.metrics.streaming_mean(prediction),
-        'eval/mean_lab':slim.metrics.streaming_mean(ground_truth),
-        'eval/cov_pred':slim.metrics.streaming_covariance(prediction, prediction),
-        'eval/cov_lab':slim.metrics.streaming_covariance(ground_truth, ground_truth),
-        'eval/cov_lab_pred':slim.metrics.streaming_covariance(prediction, ground_truth)
-    })
+    with tf.name_scope('my_metrics'):
+        names_to_values, names_to_updates = tf.contrib.metrics.aggregate_metric_map({
+            'eval/mean_pred': tf.metrics.mean(prediction),
+            'eval/mean_lab': tf.metrics.mean(ground_truth),
+            'eval/cov_pred': tf.contrib.metrics.streaming_covariance(prediction, prediction),
+            'eval/cov_lab': tf.contrib.metrics.streaming_covariance(ground_truth, ground_truth),
+            'eval/cov_lab_pred': tf.contrib.metrics.streaming_covariance(prediction, ground_truth)
+        })
 
-    metrics = dict()
-    for name, value in names_to_values.items():
-      metrics[name] = value
+        metrics = dict()
+        for name, value in names_to_values.items():
+            metrics[name] = value
 
-    mean_pred = metrics['eval/mean_pred']
-    var_pred = metrics['eval/cov_pred']
-    mean_lab = metrics['eval/mean_lab']
-    var_lab = metrics['eval/cov_lab']
-    var_lab_pred = metrics['eval/cov_lab_pred']
+        mean_pred = metrics['eval/mean_pred']
+        var_pred = metrics['eval/cov_pred']
+        mean_lab = metrics['eval/mean_lab']
+        var_lab = metrics['eval/cov_lab']
+        var_lab_pred = metrics['eval/cov_lab_pred']
 
-    mean_pred = tf.Print(mean_pred, [names_to_values['eval/mean_pred'], slim.metrics.streaming_mean(prediction[:]), tf.reduce_mean(prediction)], 'Debug_: mean_pred_value:')
+        # mean_pred = tf.Print(mean_pred, [names_to_values['eval/mean_pred'], slim.metrics.streaming_mean(prediction[:]), tf.reduce_mean(prediction)], 'Debug_: mean_pred_value:')
 
-    denominator = (var_pred + var_lab + (mean_pred - mean_lab) ** 2)
+        denominator = (var_pred + var_lab + tf.square(mean_pred - mean_lab))
 
-    concordance_cc2 = (2 * var_lab_pred) / denominator
+        concordance_cc2 = (2 * var_lab_pred) / denominator
 
-    return concordance_cc2, names_to_values, names_to_updates
+    return concordance_cc2, names_to_values, [x for x in names_to_updates.values()]

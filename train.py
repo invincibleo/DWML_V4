@@ -141,8 +141,8 @@ def train(dataset_dir=None,
           epochs=10,
           ):
     total_num = 7500 * 9
-    loss_list = np.zeros((1, epochs))
-    dev_loss_list = np.zeros((1, epochs))
+    loss_list = np.zeros((epochs, int(np.ceil(total_num/seq_length/batch_size))))
+    dev_loss_list = np.zeros((epochs, 9)) # 9 files
 
     g = tf.Graph()
     with g.as_default():
@@ -197,16 +197,22 @@ def train(dataset_dir=None,
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
         train = optimizer.minimize(total_loss)
 
+        concordance_cc2, names_to_values, names_to_updates = metrics.concordance_cc2(prediction, ground_truth)
+        metrics_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="my_metrics")
+        metrics_vars_initializer = tf.variables_initializer(var_list=metrics_vars)
+
         with tf.Session(graph=g) as sess:
             merged = tf.summary.merge_all()
             train_writer = tf.summary.FileWriter('./log', sess.graph)
             modal_saver = tf.train.Saver()
 
             sess.run(tf.global_variables_initializer())
+            sess.run(metrics_vars_initializer)
 
             for epoch_no in range(epochs):
                 print('\nEpoch No: {}'.format(epoch_no))
-                train_loss, val_loss = 0, 0
+                train_loss, val_loss = 0.0, 0.0
+                train_ccc, val_ccc = 0.0, 0.0
                 count_num_train, count_num_dev = 0, 0
 
                 # Initialize the iterator with different dataset
@@ -214,50 +220,59 @@ def train(dataset_dir=None,
                 dev_init_op = iterator.make_initializer(dev_ds)
                 try:
                     sess.run(training_init_op)
-                    with tqdm(total=int(total_num/seq_length)+1, desc='Training') as pbar:
+                    with tqdm(total=int(total_num/seq_length), desc='Training') as pbar:
                         while True:
-                            _, loss, summary = sess.run((train, total_loss, merged), feed_dict={is_training: True})
+                            _, loss, summary, _ = sess.run((train, total_loss, merged, names_to_updates), feed_dict={is_training: True})
                             train_loss += loss
-                            loss_list[:, epoch_no] = loss
+                            loss_list[epoch_no, count_num_train] = loss
                             pbar.update(batch_size)
                             count_num_train += 1
                             # print('\n train loss: {}'.format(loss))
                 except tf.errors.OutOfRangeError:
                     train_loss /= count_num_train
-                    print('Training loss: {}'.format(train_loss))
+                    train_ccc = sess.run(concordance_cc2)
+                    sess.run(metrics_vars_initializer)
+                    print('Training loss: {}\n Training CCC: {}'.format(train_loss, train_ccc))
                     train_writer.add_summary(summary, epoch_no)
-                    pass
 
                 # Initialize iterator with validation data
                 try:
                     sess.run(dev_init_op)
-                    with tqdm(total=int(total_num/seq_length)+1, desc='Validation') as pbar_dev:
+                    with tqdm(total=int(total_num/seq_length), desc='Validation') as pbar_dev:
                         while True:
-                            loss, summary = sess.run((total_loss, merged), feed_dict={is_training: False})
+                            loss, summary, _ = sess.run((total_loss, merged, names_to_updates), feed_dict={is_training: False})
                             val_loss += loss
-                            dev_loss_list[:, epoch_no] = loss
+                            dev_loss_list[epoch_no, count_num_dev] = loss
                             pbar_dev.update(int(7500/seq_length))
                             count_num_dev += 1
                             # print('\n val loss: {}'.format(loss))
                 except tf.errors.OutOfRangeError:
                     val_loss /= count_num_dev
-                    print('\nEpoch: {}\nTraining loss: {}\nValidation loss: {}'.format(epoch_no, train_loss, val_loss))
+                    val_ccc = sess.run(concordance_cc2)
+                    sess.run(metrics_vars_initializer)
+                    print('\nEpoch: {}'.format(epoch_no))
+                    print('\nTraining loss: {}, Training CCC: {}'.format(train_loss, train_ccc))
+                    print('\nValidation loss: {}, Validation CCC: {}'.format(val_loss, val_ccc))
                     train_writer.add_summary(summary, epoch_no)
-                    pass
 
             # Save the model
-            save_path = modal_saver.save(sess, "/tmp/model.ckpt")
+            save_path = modal_saver.save(sess, "./test_output_dir/model.ckpt")
             print("Model saved in path: %s" % save_path)
     return loss_list, dev_loss_list
 
 
 if __name__ == "__main__":
     loss_list, dev_loss_list = train(Path("./test_output_dir/tf_records"),
-                                     seq_length=100,
-                                     batch_size=32,
+                                     learning_rate=0.0001,
+                                     seq_length=150,
+                                     batch_size=25,
                                      num_features=640,
-                                     epochs=10)
+                                     epochs=20)
     print(str(loss_list))
     print('\n')
     print(str(dev_loss_list))
+
+    # Save the results
+    np.savetxt("./test_output_dir/loss_list.txt", loss_list, delimiter=',')
+    np.savetxt("./test_output_dir/dev_loss_list.txt", dev_loss_list, delimiter=',')
 
