@@ -196,6 +196,7 @@ def train(dataset_dir=None,
             concordance_cc2, _, names_to_updates = metrics.concordance_cc2(pred_single, gt_single)
             concordance_cc2_list.append(concordance_cc2)
             names_to_updates_list.append(names_to_updates)
+            tf.summary.scalar('metric/ccc_{}'.format(name), concordance_cc2)
             # MSE
             with tf.name_scope('my_metrics'):
                 mse, mse_update_op = tf.metrics.mean_squared_error(gt_single, pred_single)
