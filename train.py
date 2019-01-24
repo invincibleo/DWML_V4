@@ -9,14 +9,12 @@
 
 from __future__ import absolute_import, division, print_function
 
-import sys
 import tensorflow as tf
 import data_provider
 import losses
 import metrics
 import models
 import numpy as np
-from tensorflow import keras
 from pathlib import Path
 from tqdm import tqdm
 
