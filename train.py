@@ -14,6 +14,7 @@ import tensorflow as tf
 import data_provider
 import losses
 import metrics
+import models
 import numpy as np
 from tensorflow import keras
 from pathlib import Path
@@ -27,110 +28,6 @@ tf.enable_eager_execution()
 
 print("TensorFlow version: {}".format(tf.__version__))
 print("Eager execution: {}".format(tf.executing_eagerly()))
-
-
-def input_fn(dataset_dir, is_training=True, split_name=None, batch_size=32, seq_length=2):
-    dataset = data_provider.get_dataset(dataset_dir,
-                                        is_training=is_training,
-                                        split_name=split_name,
-                                        batch_size=batch_size,
-                                        seq_length=seq_length,
-                                        debugging=False)
-
-    # Return the read end of the pipeline.
-    return dataset #.make_initializable_iterator() #.get_next() # make_one_shot_iterator
-
-
-def my_model(audio_frames=None,
-             hidden_units=256,
-             seq_length=2,
-             num_features=640,
-             number_of_outputs=2,
-             is_training=False):
-
-    audio_input = tf.reshape(audio_frames['features'], [-1, 1, 640, 1])
-
-    # All conv2d should be SAME padding
-    net = tf.layers.dropout(audio_input,
-                            rate=0.5,
-                            training=is_training,
-                            name='Input_Dropout')
-    net = tf.layers.conv2d(net,
-                           filters=64,
-                           kernel_size=(1, 8),
-                           strides=(1, 1),
-                           padding='same',
-                           data_format='channels_last',
-                           activation=None,
-                           use_bias=True,
-                           name='Conv2d_1')
-
-    net = tf.nn.max_pool(
-        net,
-        ksize=[1, 1, 10, 1],
-        strides=[1, 1, 10, 1],
-        padding='SAME',
-        name='Maxpooling_1')
-
-    # Original model had 400 output filters for the second conv layer
-    # but this trains much faster and achieves comparable accuracy.
-    net = tf.layers.conv2d(net,
-                           filters=128,
-                           kernel_size=(1, 6),
-                           strides=(1, 1),
-                           padding='same',
-                           data_format='channels_last',
-                           activation=None,
-                           use_bias=True,
-                           name='Conv2d_2')
-
-    net = tf.nn.max_pool(
-        net,
-        ksize=[1, 1, 8, 1],
-        strides=[1, 1, 8, 1],
-        padding='SAME',
-        name='Maxpooling_2')
-
-    net = tf.layers.conv2d(net,
-                           filters=256,
-                           kernel_size=(1, 6),
-                           strides=(1, 1),
-                           padding='same',
-                           data_format='channels_last',
-                           activation=None,
-                           use_bias=True,
-                           name='Conv2d_3')
-
-    net = tf.reshape(net, (-1, num_features // 80, 256, 1)) # -1 -> batch_size*seq_length
-
-    # Pooling over the feature maps.
-    net = tf.nn.max_pool(
-        net,
-        ksize=[1, 1, 8, 1],
-        strides=[1, 1, 8, 1],
-        padding='SAME',
-        name='Maxpooling_3')
-
-    net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32)) # -1 -> batch_size
-
-    stacked_lstm = []
-    for iiLyr in range(2):
-        stacked_lstm.append(
-            tf.nn.rnn_cell.LSTMCell(num_units=hidden_units, use_peepholes=True, cell_clip=100, state_is_tuple=True))
-    stacked_lstm = tf.nn.rnn_cell.MultiRNNCell(cells=stacked_lstm, state_is_tuple=True)
-
-    # We have to specify the dimensionality of the Tensor so we can allocate
-    # weights for the fully connected layers.
-    outputs, _ = tf.nn.dynamic_rnn(stacked_lstm, net, dtype=tf.float32)
-
-    net = tf.reshape(outputs, (-1, hidden_units)) # -1 -> batch_size*seq_length
-
-    prediction = tf.layers.dense(net,
-                                 number_of_outputs,
-                                 activation=None)
-    tf.summary.histogram('output_activations/arousal', tf.reshape(prediction[:, 0], [-1, ]))
-    tf.summary.histogram('output_activations/valence', tf.reshape(prediction[:, 1], [-1, ]))
-    return tf.reshape(prediction, (-1, seq_length, number_of_outputs))
 
 
 def train(dataset_dir=None,
@@ -147,34 +44,39 @@ def train(dataset_dir=None,
     g = tf.Graph()
     with g.as_default():
         # Define the datasets
-        train_ds = input_fn(dataset_dir,
-                            is_training=True,
-                            batch_size=batch_size,
-                            seq_length=seq_length,
-                            split_name='train')
+        train_ds = data_provider.get_dataset(dataset_dir,
+                                             is_training=True,
+                                             split_name='train',
+                                             batch_size=batch_size,
+                                             seq_length=seq_length,
+                                             debugging=False)
 
         # Pay attension that the validation set should be evaluate file-wise
-        dev_ds = input_fn(dataset_dir,
-                          is_training=False,
-                          batch_size=int(7500/seq_length),
-                          seq_length=seq_length,
-                          split_name='valid')
+        dev_ds = data_provider.get_dataset(dataset_dir,
+                                           is_training=False,
+                                           split_name='valid',
+                                           batch_size=int(7500/seq_length),
+                                           seq_length=seq_length,
+                                           debugging=False)
 
         # Make the iterator
         iterator = tf.data.Iterator.from_structure(train_ds.output_types,
                                                    dev_ds.output_shapes)
 
+        # Placeholder for variable is_training
         is_training = tf.placeholder(tf.bool, shape=())
 
+        # Get tensor signature from the dataset
         features, ground_truth = iterator.get_next() #train_input_fn()
         ground_truth = tf.squeeze(ground_truth, 2)
 
-        prediction = my_model(audio_frames=features,
-                              hidden_units=256,
-                              seq_length=seq_length,
-                              num_features=num_features,
-                              number_of_outputs=2,
-                              is_training=is_training)
+        # Get the output tensor
+        prediction = models.e2e_2017(audio_frames=features,
+                                     hidden_units=256,
+                                     seq_length=seq_length,
+                                     num_features=num_features,
+                                     number_of_outputs=2,
+                                     is_training=is_training)
 
         # Define the loss function
         concordance_cc2_list = []
@@ -208,6 +110,7 @@ def train(dataset_dir=None,
         total_loss = tf.losses.get_total_loss()
         tf.summary.scalar('losses/total_loss', total_loss)
 
+        # Define the optimizer
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
         train = optimizer.minimize(total_loss)
 
@@ -216,13 +119,17 @@ def train(dataset_dir=None,
         metrics_vars_initializer = tf.variables_initializer(var_list=metrics_vars)
 
         with tf.Session(graph=g) as sess:
+            # Define the writers
             merged = tf.summary.merge_all()
             train_writer = tf.summary.FileWriter('./test_output_dir/log/train/', sess.graph)
             val_writer = tf.summary.FileWriter('./test_output_dir/log/validation/')
             modal_saver = tf.train.Saver()
 
+            # Initialize the variables
             sess.run(tf.global_variables_initializer())
             sess.run(metrics_vars_initializer)
+
+            # Epochs
             for epoch_no in range(epochs):
                 print('\nEpoch No: {}'.format(epoch_no))
                 train_loss, val_loss = 0.0, 0.0
@@ -231,6 +138,8 @@ def train(dataset_dir=None,
                 # Initialize the iterator with different dataset
                 training_init_op = iterator.make_initializer(train_ds)
                 dev_init_op = iterator.make_initializer(dev_ds)
+
+                # Training phase
                 try:
                     sess.run(training_init_op)
                     with tqdm(total=int(total_num/seq_length), desc='Training') as pbar:
