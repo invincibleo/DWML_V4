@@ -128,7 +128,8 @@ def my_model(audio_frames=None,
     prediction = tf.layers.dense(net,
                                  number_of_outputs,
                                  activation=None)
-    tf.summary.histogram('activations', prediction)
+    tf.summary.histogram('output_activations/arousal', tf.reshape(prediction[:, 0], [-1, ]))
+    tf.summary.histogram('output_activations/valence', tf.reshape(prediction[:, 1], [-1, ]))
     return tf.reshape(prediction, (-1, seq_length, number_of_outputs))
 
 
@@ -283,24 +284,24 @@ def train(dataset_dir=None,
                     val_mse_valence = sess.run(mse_list[1])
                     sess.run(metrics_vars_initializer)
                     print('\nEpoch: {}'.format(epoch_no))
-                    print('Training loss: {}, '
-                          'Training arousal CCC: {}, '
-                          'Training valence CCC: {}, '
-                          'Training arousal MSE: {}, '
-                          'Training valence MSE: {}'.format(train_loss,
-                                                            train_ccc_arousal,
-                                                            train_ccc_valence,
-                                                            train_mse_arousal,
-                                                            train_mse_valence))
-                    print('Validation loss: {},'
-                          'Validation arousal CCC: {}, '
-                          'Validation valence CCC: {}, '
-                          'Validation arousal MSE: {}, '
-                          'Validation valence MSE: {}'.format(val_loss,
-                                                              val_ccc_arousal,
-                                                              val_ccc_valence,
-                                                              val_mse_arousal,
-                                                              val_mse_valence))
+                    print('Training loss: {}\n'
+                          'Training arousal CCC: {}\n'
+                          'Training valence CCC: {}\n'
+                          'Training arousal MSE: {}\n'
+                          'Training valence MSE: {}\n'.format(train_loss,
+                                                              train_ccc_arousal,
+                                                              train_ccc_valence,
+                                                              train_mse_arousal,
+                                                              train_mse_valence))
+                    print('Validation loss: {}\n'
+                          'Validation arousal CCC: {}\n'
+                          'Validation valence CCC: {}\n'
+                          'Validation arousal MSE: {}\n'
+                          'Validation valence MSE: {}\n'.format(val_loss,
+                                                                val_ccc_arousal,
+                                                                val_ccc_valence,
+                                                                val_mse_arousal,
+                                                                val_mse_valence))
                     val_writer.add_summary(summary, epoch_no)
 
             # Save the model
