@@ -65,7 +65,7 @@ def train(dataset_dir=None,
         is_training = tf.placeholder(tf.bool, shape=())
 
         # Get tensor signature from the dataset
-        features, ground_truth = iterator.get_next() #train_input_fn()
+        features, ground_truth = iterator.get_next()
         ground_truth = tf.squeeze(ground_truth, 2)
 
         # Get the output tensor
@@ -119,8 +119,8 @@ def train(dataset_dir=None,
         with tf.Session(graph=g) as sess:
             # Define the writers
             merged = tf.summary.merge_all()
-            train_writer = tf.summary.FileWriter('./test_output_dir/log/train/', sess.graph)
-            val_writer = tf.summary.FileWriter('./test_output_dir/log/validation/')
+            train_writer = tf.summary.FileWriter('./output_dir/log/train/', sess.graph)
+            val_writer = tf.summary.FileWriter('./output_dir/log/validation/')
             modal_saver = tf.train.Saver()
 
             # Initialize the variables
@@ -213,13 +213,13 @@ def train(dataset_dir=None,
                     val_writer.add_summary(summary, epoch_no)
 
             # Save the model
-            save_path = modal_saver.save(sess, "./test_output_dir/model.ckpt")
+            save_path = modal_saver.save(sess, "./output_dir/model.ckpt")
             print("Model saved in path: %s" % save_path)
     return loss_list, dev_loss_list
 
 
 if __name__ == "__main__":
-    loss_list, dev_loss_list = train(Path("./test_output_dir/tf_records"),
+    loss_list, dev_loss_list = train(Path("./tf_records"),
                                      learning_rate=0.0001,
                                      seq_length=150,
                                      batch_size=25,
@@ -230,6 +230,6 @@ if __name__ == "__main__":
     print(str(dev_loss_list))
 
     # Save the results
-    np.savetxt("./test_output_dir/loss_list.txt", loss_list, delimiter=',')
-    np.savetxt("./test_output_dir/dev_loss_list.txt", dev_loss_list, delimiter=',')
+    np.savetxt("./output_dir/loss_list.txt", loss_list, delimiter=',')
+    np.savetxt("./output_dir/dev_loss_list.txt", dev_loss_list, delimiter=',')
 
