@@ -9,6 +9,8 @@
 
 from __future__ import absolute_import, division, print_function
 
+import argparse
+import sys
 import tensorflow as tf
 import data_provider
 import losses
@@ -34,6 +36,7 @@ def train(dataset_dir=None,
           seq_length=2,
           num_features=640,
           epochs=10,
+          model_name='e2e_2017',
           output_dir='./output_dir',
           ):
     total_num = 7500 * 9
@@ -70,12 +73,12 @@ def train(dataset_dir=None,
         ground_truth = tf.squeeze(ground_truth, 2)
 
         # Get the output tensor
-        prediction = models.e2e_2017(audio_frames=features,
-                                     hidden_units=256,
-                                     seq_length=seq_length,
-                                     num_features=num_features,
-                                     number_of_outputs=2,
-                                     is_training=is_training)
+        prediction = eval('models.'+model_name)(audio_frames=features,
+                                                hidden_units=256,
+                                                seq_length=seq_length,
+                                                num_features=num_features,
+                                                number_of_outputs=2,
+                                                is_training=is_training)
 
         # Define the loss function
         concordance_cc2_list = []
@@ -220,13 +223,53 @@ def train(dataset_dir=None,
 
 
 if __name__ == "__main__":
-    output_dir = './2017_e2e_output_dir'
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--output_dir',
+        type=str,
+        default='./2017_e2e_output_dir',
+        help='Path to output dir where everything logs in'
+    )
+    parser.add_argument(
+        '--model',
+        type=str,
+        default='e2e_2017',
+        help="Model name that you want to use to train"
+    )
+    parser.add_argument(
+        '--batch_size',
+        type=int,
+        default=25,
+        help="Batch size"
+    )
+    parser.add_argument(
+        '--seq_length',
+        type=int,
+        default=150,
+        help="sequence length"
+    )
+    parser.add_argument(
+        '--epochs',
+        type=int,
+        default=300,
+        help="Epochs number"
+    )
+    parser.add_argument(
+        '--learning_rate',
+        type=float,
+        default=0.0001,
+        help="Initial learning rate"
+    )
+    FLAGS, unparsed = parser.parse_known_args()
+
+    output_dir = FLAGS.output_dir
     loss_list, dev_loss_list = train(Path("./tf_records"),
-                                     learning_rate=0.0001,
-                                     seq_length=150,
-                                     batch_size=25,
+                                     learning_rate=FLAGS.learning_rate,
+                                     seq_length=FLAGS.seq_length,
+                                     batch_size=FLAGS.batch_size,
                                      num_features=640,
-                                     epochs=20,
+                                     epochs=FLAGS.epochs,
+                                     model_name=FLAGS.model,
                                      output_dir=output_dir)
     print(str(loss_list))
     print('\n')
