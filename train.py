@@ -184,8 +184,9 @@ def train(dataset_dir=None,
             pred_single = tf.reshape(prediction[:, :, i], (-1,))
             gt_single = tf.reshape(ground_truth[:, :, i], (-1,))  # ground_truth
 
+            # Define the loss
             loss = losses.concordance_cc(pred_single, gt_single)
-            tf.summary.scalar('{}losses/{} loss'.format(tf.cond(is_training, lambda: 'train', lambda: 'valid'), name), loss)
+            tf.summary.scalar('losses/CCC_{}_loss'.format(name), loss)
 
             tf.losses.add_loss(loss / 2.)
 
@@ -195,24 +196,27 @@ def train(dataset_dir=None,
             concordance_cc2_list.append(concordance_cc2)
             names_to_updates_list.append(names_to_updates)
             # MSE
-            mse, mse_update_op = tf.metrics.mean_squared_error(gt_single, prediction)
+            with tf.name_scope('my_metrics'):
+                mse, mse_update_op = tf.metrics.mean_squared_error(gt_single, pred_single)
             mse_list.append(mse)
             mse_update_op_list.append(mse_update_op)
-            # tf.summary.scalar('losses/mse {} loss'.format(name), mse)
+            tf.summary.scalar('metric/mse_{}'.format(name), mse)
 
         # aa = tf.get_collection(tf.GraphKeys.LOSSES)
         total_loss = tf.losses.get_total_loss()
-        tf.summary.scalar('losses/total loss', total_loss)
+        tf.summary.scalar('losses/total_loss', total_loss)
 
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
         train = optimizer.minimize(total_loss)
 
+        # Metrics initializer
         metrics_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="my_metrics")
         metrics_vars_initializer = tf.variables_initializer(var_list=metrics_vars)
 
         with tf.Session(graph=g) as sess:
             merged = tf.summary.merge_all()
-            train_writer = tf.summary.FileWriter('./log', sess.graph)
+            train_writer = tf.summary.FileWriter('./test_output_dir/log/train/', sess.graph)
+            val_writer = tf.summary.FileWriter('./test_output_dir/log/validation/')
             modal_saver = tf.train.Saver()
 
             sess.run(tf.global_variables_initializer())
@@ -232,8 +236,7 @@ def train(dataset_dir=None,
                             _, loss, summary, _, _ = sess.run((train,
                                                                total_loss,
                                                                merged,
-                                                               names_to_updates_list[0],
-                                                               names_to_updates_list[1],
+                                                               names_to_updates_list,
                                                                mse_update_op_list),
                                                               feed_dict={is_training: True})
                             train_loss += loss
@@ -265,8 +268,7 @@ def train(dataset_dir=None,
                         while True:
                             loss, summary, _, _ = sess.run((total_loss,
                                                             merged,
-                                                            names_to_updates_list[0],
-                                                            names_to_updates_list[1],
+                                                            names_to_updates_list,
                                                             mse_update_op_list),
                                                            feed_dict={is_training: False})
                             val_loss += loss
@@ -299,7 +301,7 @@ def train(dataset_dir=None,
                                                               val_ccc_valence,
                                                               val_mse_arousal,
                                                               val_mse_valence))
-                    train_writer.add_summary(summary, epoch_no)
+                    val_writer.add_summary(summary, epoch_no)
 
             # Save the model
             save_path = modal_saver.save(sess, "./test_output_dir/model.ckpt")
