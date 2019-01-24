@@ -34,6 +34,7 @@ def train(dataset_dir=None,
           seq_length=2,
           num_features=640,
           epochs=10,
+          output_dir='./output_dir',
           ):
     total_num = 7500 * 9
     loss_list = np.zeros((epochs, int(np.ceil(total_num/seq_length/batch_size))))
@@ -119,8 +120,8 @@ def train(dataset_dir=None,
         with tf.Session(graph=g) as sess:
             # Define the writers
             merged = tf.summary.merge_all()
-            train_writer = tf.summary.FileWriter('./output_dir/log/train/', sess.graph)
-            val_writer = tf.summary.FileWriter('./output_dir/log/validation/')
+            train_writer = tf.summary.FileWriter(output_dir + '/log/train/', sess.graph)
+            val_writer = tf.summary.FileWriter(output_dir + '/log/validation/')
             modal_saver = tf.train.Saver()
 
             # Initialize the variables
@@ -213,23 +214,25 @@ def train(dataset_dir=None,
                     val_writer.add_summary(summary, epoch_no)
 
             # Save the model
-            save_path = modal_saver.save(sess, "./output_dir/model.ckpt")
+            save_path = modal_saver.save(sess, output_dir + "/model.ckpt")
             print("Model saved in path: %s" % save_path)
     return loss_list, dev_loss_list
 
 
 if __name__ == "__main__":
+    output_dir = './2017_e2e_output_dir'
     loss_list, dev_loss_list = train(Path("./tf_records"),
                                      learning_rate=0.0001,
                                      seq_length=150,
                                      batch_size=25,
                                      num_features=640,
-                                     epochs=20)
+                                     epochs=20,
+                                     output_dir=output_dir)
     print(str(loss_list))
     print('\n')
     print(str(dev_loss_list))
 
     # Save the results
-    np.savetxt("./output_dir/loss_list.txt", loss_list, delimiter=',')
-    np.savetxt("./output_dir/dev_loss_list.txt", dev_loss_list, delimiter=',')
+    np.savetxt(output_dir + "/loss_list.txt", loss_list, delimiter=',')
+    np.savetxt(output_dir + "/dev_loss_list.txt", dev_loss_list, delimiter=',')
 
