@@ -32,7 +32,8 @@ print("Eager execution: {}".format(tf.executing_eagerly()))
 
 
 def train(dataset_dir=None,
-          learning_rate=0.001,
+          init_learning_rate=0.001,
+          learning_rate_decay=True,
           batch_size=32,
           seq_length=2,
           num_features=640,
@@ -113,6 +114,21 @@ def train(dataset_dir=None,
         total_loss = tf.losses.get_total_loss()
         tf.summary.scalar('losses/total_loss', total_loss)
 
+        # Learning rate decay
+        global_step = tf.Variable(0, trainable=False)
+        if learning_rate_decay is True:
+            learning_rate = tf.train.cosine_decay_restarts(learning_rate=init_learning_rate,
+                                                           global_step=global_step,
+                                                           first_decay_steps=50,
+                                                           t_mul=2.0,
+                                                           m_mul=0.5,
+                                                           alpha=0.0,  # Minimum learning rate value as a fraction of the learning_rate.
+                                                           name='cosine_decay_restarts')
+            add_global = global_step.assign_add(1)
+            tf.summary.scalar('learning_rate', learning_rate)
+        else:
+            learning_rate = init_learning_rate
+
         # Define the optimizer
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
         train = optimizer.minimize(total_loss)
@@ -143,6 +159,11 @@ def train(dataset_dir=None,
                 # Initialize the iterator with different dataset
                 training_init_op = iterator.make_initializer(train_ds)
                 dev_init_op = iterator.make_initializer(dev_ds)
+
+                # Get the learning_rate if learning_rate_decay = True
+                if learning_rate_decay is True:
+                    _, rate = sess.run([add_global, learning_rate])
+                    print('Current learning_rate: {}'.format(rate))
 
                 # Training phase
                 try:
@@ -270,11 +291,18 @@ if __name__ == "__main__":
         default=0.0001,
         help="Initial learning rate"
     )
+    parser.add_argument(
+        '--learning_rate_decay',
+        type=bool,
+        default=True,
+        help="Initial learning rate"
+    )
     FLAGS, unparsed = parser.parse_known_args()
 
     output_dir = FLAGS.output_dir
     loss_list, dev_loss_list = train(Path("./tf_records"),
-                                     learning_rate=FLAGS.learning_rate,
+                                     init_learning_rate=FLAGS.learning_rate,
+                                     learning_rate_decay=FLAGS.learning_rate_decay,
                                      seq_length=FLAGS.seq_length,
                                      batch_size=FLAGS.batch_size,
                                      num_features=640,
