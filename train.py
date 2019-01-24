@@ -6,6 +6,7 @@
 
 # Reference and tutorial
 # How to do training and validation alternatively https://zhuanlan.zhihu.com/p/43356309
+# Save and restore models https://blog.csdn.net/huachao1001/article/details/78501928
 
 from __future__ import absolute_import, division, print_function
 
@@ -125,7 +126,8 @@ def train(dataset_dir=None,
             merged = tf.summary.merge_all()
             train_writer = tf.summary.FileWriter(output_dir + '/log/train/', sess.graph)
             val_writer = tf.summary.FileWriter(output_dir + '/log/validation/')
-            modal_saver = tf.train.Saver()
+            modal_saver = tf.train.Saver(max_to_keep=10,
+                                         keep_checkpoint_every_n_hours=1)
 
             # Initialize the variables
             sess.run(tf.global_variables_initializer())
@@ -216,8 +218,11 @@ def train(dataset_dir=None,
                                                                 val_mse_valence))
                     val_writer.add_summary(summary, epoch_no)
 
-            # Save the model
-            save_path = modal_saver.save(sess, output_dir + "/model.ckpt")
+                # Save the model
+                save_path = modal_saver.save(sess,
+                                             save_path=output_dir + "/model.ckpt",
+                                             global_step=epoch_no,
+                                             )
             print("Model saved in path: %s" % save_path)
     return loss_list, dev_loss_list
 
