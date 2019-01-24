@@ -178,6 +178,8 @@ def train(dataset_dir=None,
         # Define the loss function
         concordance_cc2_list = []
         names_to_updates_list = []
+        mse_list = []
+        mse_update_op_list = []
         for i, name in enumerate(['arousal', 'valence']):
             pred_single = tf.reshape(prediction[:, :, i], (-1,))
             gt_single = tf.reshape(ground_truth[:, :, i], (-1,))  # ground_truth
@@ -185,14 +187,18 @@ def train(dataset_dir=None,
             loss = losses.concordance_cc(pred_single, gt_single)
             tf.summary.scalar('{}losses/{} loss'.format(tf.cond(is_training, lambda: 'train', lambda: 'valid'), name), loss)
 
-            mse = tf.reduce_mean(tf.square(pred_single - gt_single))
-            # tf.summary.scalar('losses/mse {} loss'.format(name), mse)
-
             tf.losses.add_loss(loss / 2.)
 
+            # Define some metrics
+            # CCC
             concordance_cc2, _, names_to_updates = metrics.concordance_cc2(pred_single, gt_single)
             concordance_cc2_list.append(concordance_cc2)
             names_to_updates_list.append(names_to_updates)
+            # MSE
+            mse, mse_update_op = tf.metrics.mean_squared_error(gt_single, prediction)
+            mse_list.append(mse)
+            mse_update_op_list.append(mse_update_op)
+            # tf.summary.scalar('losses/mse {} loss'.format(name), mse)
 
         # aa = tf.get_collection(tf.GraphKeys.LOSSES)
         total_loss = tf.losses.get_total_loss()
@@ -227,24 +233,32 @@ def train(dataset_dir=None,
                                                                total_loss,
                                                                merged,
                                                                names_to_updates_list[0],
-                                                               names_to_updates_list[1]),
+                                                               names_to_updates_list[1],
+                                                               mse_update_op_list),
                                                               feed_dict={is_training: True})
                             train_loss += loss
                             loss_list[epoch_no, count_num_train] = loss
                             pbar.update(batch_size)
                             count_num_train += 1
-                            # print('\n train loss: {}'.format(loss))
                 except tf.errors.OutOfRangeError:
                     train_loss /= count_num_train
                     train_ccc_arousal = sess.run(concordance_cc2_list[0])
                     train_ccc_valence = sess.run(concordance_cc2_list[1])
+                    train_mse_arousal = sess.run(mse_list[0])
+                    train_mse_valence = sess.run(mse_list[1])
                     sess.run(metrics_vars_initializer)
                     print('Training loss: {}\n'
                           'Training arousal CCC: {}\n'
-                          'Training valence CCC: {}'.format(train_loss, train_ccc_arousal, train_ccc_valence))
+                          'Training valence CCC: {}\n'
+                          'Training arousal MSE: {}\n'
+                          'Training valence MSE: {}'.format(train_loss,
+                                                            train_ccc_arousal,
+                                                            train_ccc_valence,
+                                                            train_mse_arousal,
+                                                            train_mse_valence))
                     train_writer.add_summary(summary, epoch_no)
 
-                # Initialize iterator with validation data
+                # Validation phase
                 try:
                     sess.run(dev_init_op)
                     with tqdm(total=int(total_num/seq_length), desc='Validation') as pbar_dev:
@@ -252,25 +266,39 @@ def train(dataset_dir=None,
                             loss, summary, _, _ = sess.run((total_loss,
                                                             merged,
                                                             names_to_updates_list[0],
-                                                            names_to_updates_list[1]),
+                                                            names_to_updates_list[1],
+                                                            mse_update_op_list),
                                                            feed_dict={is_training: False})
                             val_loss += loss
                             dev_loss_list[epoch_no, count_num_dev] = loss
                             pbar_dev.update(int(7500/seq_length))
                             count_num_dev += 1
-                            # print('\n val loss: {}'.format(loss))
                 except tf.errors.OutOfRangeError:
                     val_loss /= count_num_dev
                     val_ccc_arousal = sess.run(concordance_cc2_list[0])
                     val_ccc_valence = sess.run(concordance_cc2_list[1])
+                    val_mse_arousal = sess.run(mse_list[0])
+                    val_mse_valence = sess.run(mse_list[1])
                     sess.run(metrics_vars_initializer)
                     print('\nEpoch: {}'.format(epoch_no))
-                    print('Training loss: {},'
-                          ' Training arousal CCC: {},'
-                          ' Training valence CCC: {}'.format(train_loss, train_ccc_arousal, train_ccc_valence))
+                    print('Training loss: {}, '
+                          'Training arousal CCC: {}, '
+                          'Training valence CCC: {}, '
+                          'Training arousal MSE: {}, '
+                          'Training valence MSE: {}'.format(train_loss,
+                                                            train_ccc_arousal,
+                                                            train_ccc_valence,
+                                                            train_mse_arousal,
+                                                            train_mse_valence))
                     print('Validation loss: {},'
-                          ' Validation arousal CCC: {},'
-                          ' Training valence CCC: {}'.format(val_loss, val_ccc_arousal, val_ccc_valence))
+                          'Validation arousal CCC: {}, '
+                          'Validation valence CCC: {}, '
+                          'Validation arousal MSE: {}, '
+                          'Validation valence MSE: {}'.format(val_loss,
+                                                              val_ccc_arousal,
+                                                              val_ccc_valence,
+                                                              val_mse_arousal,
+                                                              val_mse_valence))
                     train_writer.add_summary(summary, epoch_no)
 
             # Save the model
