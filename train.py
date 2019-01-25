@@ -241,14 +241,15 @@ def train(dataset_dir=None,
                     val_writer.add_summary(summary, epoch_no)
                     val_new_metric = [val_ccc_arousal, val_ccc_valence]
 
-                if val_new_metric >= val_old_metric:
+                # Have some penalty for the large shoot at beginning
+                if val_new_metric >= [x*0.9 for x in val_old_metric]:
                     # Save the model
                     save_path = modal_saver.save(sess,
                                                  save_path=output_dir + "/model.ckpt",
                                                  global_step=epoch_no,
                                                  )
                     print("Model saved in path: %s" % save_path)
-                val_old_metric = val_new_metric
+                    val_old_metric = val_new_metric
 
     return loss_list, dev_loss_list
 
