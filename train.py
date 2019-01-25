@@ -44,7 +44,7 @@ def train(dataset_dir=None,
     total_num = 7500 * 9
     loss_list = np.zeros((epochs, int(np.ceil(total_num/seq_length/batch_size))))
     dev_loss_list = np.zeros((epochs, 9)) # 9 files
-
+    print(learning_rate_decay)
     g = tf.Graph()
     with g.as_default():
         # Define the datasets
@@ -294,13 +294,14 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--learning_rate_decay',
-        type=bool,
+        type=lambda s: s.lower() in ['true', 't', 'yes', '1'],
         default=True,
         help="Initial learning rate"
     )
     FLAGS, unparsed = parser.parse_known_args()
 
     output_dir = FLAGS.output_dir
+    print('cnm' + str(FLAGS.learning_rate_decay))
     loss_list, dev_loss_list = train(Path("./tf_records"),
                                      init_learning_rate=FLAGS.learning_rate,
                                      learning_rate_decay=FLAGS.learning_rate_decay,
