@@ -81,7 +81,7 @@ def e2e_2017(audio_frames=None,
                                  activation=None)
     tf.summary.histogram('output_activations/arousal', tf.reshape(prediction[:, 0], [-1, ]))
     tf.summary.histogram('output_activations/valence', tf.reshape(prediction[:, 1], [-1, ]))
-    return tf.reshape(prediction, (-1, seq_length, number_of_outputs))
+    return tf.reshape(prediction, (-1, seq_length, number_of_outputs)), 0
 
 
 def e2e_2018(audio_frames=None,
@@ -193,7 +193,7 @@ def e2e_2018(audio_frames=None,
                                  activation=None)
     tf.summary.histogram('output_activations/arousal', tf.reshape(prediction[:, 0], [-1, ]))
     tf.summary.histogram('output_activations/valence', tf.reshape(prediction[:, 1], [-1, ]))
-    return tf.reshape(prediction, (-1, seq_length, number_of_outputs))
+    return tf.reshape(prediction, (-1, seq_length, number_of_outputs)), 0
 
 
 def e2e_2018_seperateAE(audio_frames=None,

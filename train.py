@@ -74,13 +74,13 @@ def train(dataset_dir=None,
         ground_truth = tf.squeeze(ground_truth, 2)
 
         # Get the output tensor
-        prediction, loss_ae = eval('models.'+model_name)(audio_frames=features,
+        prediction, extra_loss = eval('models.'+model_name)(audio_frames=features,
                                                 hidden_units=256,
                                                 seq_length=seq_length,
                                                 num_features=num_features,
                                                 number_of_outputs=2,
                                                 is_training=is_training)
-        tf.losses.add_loss(loss_ae)
+        tf.losses.add_loss(extra_loss)
         # Define the loss function
         concordance_cc2_list = []
         names_to_updates_list = []
