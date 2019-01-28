@@ -44,7 +44,6 @@ def train(dataset_dir=None,
     total_num = 7500 * 9
     loss_list = np.zeros((epochs, int(np.ceil(total_num/seq_length/batch_size))))
     dev_loss_list = np.zeros((epochs, 9)) # 9 files
-    print(learning_rate_decay)
     g = tf.Graph()
     with g.as_default():
         # Define the datasets
@@ -75,13 +74,13 @@ def train(dataset_dir=None,
         ground_truth = tf.squeeze(ground_truth, 2)
 
         # Get the output tensor
-        prediction = eval('models.'+model_name)(audio_frames=features,
+        prediction, loss_ae = eval('models.'+model_name)(audio_frames=features,
                                                 hidden_units=256,
                                                 seq_length=seq_length,
                                                 num_features=num_features,
                                                 number_of_outputs=2,
                                                 is_training=is_training)
-
+        tf.losses.add_loss(loss_ae)
         # Define the loss function
         concordance_cc2_list = []
         names_to_updates_list = []
@@ -301,7 +300,6 @@ if __name__ == "__main__":
     FLAGS, unparsed = parser.parse_known_args()
 
     output_dir = FLAGS.output_dir
-    print('cnm' + str(FLAGS.learning_rate_decay))
     loss_list, dev_loss_list = train(Path("./tf_records"),
                                      init_learning_rate=FLAGS.learning_rate,
                                      learning_rate_decay=FLAGS.learning_rate_decay,
