@@ -64,7 +64,7 @@ def train(dataset_dir=None,
 
         # Make the iterator
         iterator = tf.data.Iterator.from_structure(train_ds.output_types,
-                                                   dev_ds.output_shapes)
+                                                   train_ds.output_shapes)
 
         # Placeholder for variable is_training
         is_training = tf.placeholder(tf.bool, shape=())
