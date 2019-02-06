@@ -16,7 +16,7 @@ def e2e_2017(audio_frames=None,
              number_of_outputs=2,
              is_training=False):
 
-    audio_input = tf.reshape(audio_frames['features'], [-1, 1, 640, 1])
+    audio_input = tf.reshape(audio_frames, [-1, 1, 640, 1])
 
     # All conv2d should be SAME padding
     net = tf.layers.dropout(audio_input,
@@ -95,7 +95,7 @@ def e2e_2018(audio_frames=None,
     # Panagiotis Tzirakis, Jiehao Zhang, Bj¨orn W. Schuller
     # ICASSP 2018
 
-    audio_input = tf.reshape(audio_frames['features'], [-1, 1, 640, 1])
+    audio_input = tf.reshape(audio_frames, [-1, 1, 640, 1])
 
     # ### Maybe adding a batchnormalization to normalize input
     # All conv2d should be SAME padding
@@ -207,7 +207,7 @@ def e2e_2018_seperateAE(audio_frames=None,
     # Panagiotis Tzirakis, Jiehao Zhang, Bj¨orn W. Schuller
     # ICASSP 2018
 
-    audio_input = tf.reshape(audio_frames['features'], [-1, 1, 640, 1])
+    audio_input = tf.reshape(audio_frames, [-1, 1, 640, 1])
 
     # ### Maybe adding a batchnormalization to normalize input
     # All conv2d should be SAME padding

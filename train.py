@@ -21,6 +21,9 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
 import matplotlib
 matplotlib.use("TkAgg") # Add only for Mac to avoid crashing
 import matplotlib.pyplot as plt
@@ -70,11 +73,18 @@ def train(dataset_dir=None,
         is_training = tf.placeholder(tf.bool, shape=())
 
         # Get tensor signature from the dataset
-        features, ground_truth = iterator.get_next()
-        ground_truth = tf.squeeze(ground_truth, 2)
+        # features, ground_truth = iterator.get_next()
+        # ground_truth = tf.squeeze(ground_truth, 2)
+        dataset_iter = iterator.get_next()
 
+        audio_input = tf.placeholder(dtype=tf.float32,
+                                     shape=[None, 1, seq_length, num_features],  # Can feed any shape
+                                     name='audio_input_placeholder')
+        ground_truth_input = tf.placeholder(dtype=tf.float32,
+                                            shape=[None, None, 2],
+                                            name='ground_truth_input_placeholder')
         # Get the output tensor
-        prediction, extra_loss = eval('models.'+model_name)(audio_frames=features,
+        prediction, extra_loss = eval('models.'+model_name)(audio_frames=audio_input,
                                                 hidden_units=256,
                                                 seq_length=seq_length,
                                                 num_features=num_features,
@@ -88,7 +98,7 @@ def train(dataset_dir=None,
         mse_update_op_list = []
         for i, name in enumerate(['arousal', 'valence']):
             pred_single = tf.reshape(prediction[:, :, i], (-1,))
-            gt_single = tf.reshape(ground_truth[:, :, i], (-1,))  # ground_truth
+            gt_single = tf.reshape(ground_truth_input[:, :, i], (-1,))  # ground_truth
 
             # Define the loss
             loss = losses.concordance_cc(pred_single, gt_single)
@@ -169,12 +179,19 @@ def train(dataset_dir=None,
                     sess.run(training_init_op)
                     with tqdm(total=int(total_num/seq_length), desc='Training') as pbar:
                         while True:
+                            # Retrieve the values
+                            features_value, ground_truth = sess.run(dataset_iter)
+                            ground_truth = np.array(ground_truth).squeeze(axis=2)
+                            features_value = features_value['features']
+
                             _, loss, summary, _, _ = sess.run((train,
                                                                total_loss,
                                                                merged,
                                                                names_to_updates_list,
                                                                mse_update_op_list),
-                                                              feed_dict={is_training: True})
+                                                              feed_dict={audio_input: features_value,
+                                                                         ground_truth_input: ground_truth,
+                                                                         is_training: True})
                             train_loss += loss
                             loss_list[epoch_no, count_num_train] = loss
                             pbar.update(batch_size)
@@ -202,11 +219,18 @@ def train(dataset_dir=None,
                     sess.run(dev_init_op)
                     with tqdm(total=int(total_num/seq_length), desc='Validation') as pbar_dev:
                         while True:
+                            # Retrieve the values
+                            features_value, ground_truth = sess.run(dataset_iter)
+                            ground_truth = np.array(ground_truth).squeeze(axis=2)
+                            features_value = features_value['features']
+
                             loss, summary, _, _ = sess.run((total_loss,
                                                             merged,
                                                             names_to_updates_list,
                                                             mse_update_op_list),
-                                                           feed_dict={is_training: False})
+                                                           feed_dict={audio_input: features_value,
+                                                                      ground_truth_input: ground_truth,
+                                                                      is_training: False})
                             val_loss += loss
                             dev_loss_list[epoch_no, count_num_dev] = loss
                             pbar_dev.update(int(7500/seq_length))
@@ -249,6 +273,12 @@ def train(dataset_dir=None,
                                                  )
                     print("Model saved in path: %s" % save_path)
                     val_old_metric = val_new_metric
+
+                tf.saved_model.simple_save(sess,
+                                           export_dir=output_dir + '/model_files',
+                                           inputs={"audio_input": audio_input,
+                                                   "is_training": is_training},
+                                           outputs={"prediction": prediction})
 
     return loss_list, dev_loss_list
 
