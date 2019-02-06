@@ -274,11 +274,16 @@ def train(dataset_dir=None,
                     print("Model saved in path: %s" % save_path)
                     val_old_metric = val_new_metric
 
-                tf.saved_model.simple_save(sess,
-                                           export_dir=output_dir + '/model_files',
-                                           inputs={"audio_input": audio_input,
-                                                   "is_training": is_training},
-                                           outputs={"prediction": prediction})
+            # Save the model, can reload different checkpoint later in testing
+            if os.path.exists(output_dir + '/model_files'):
+                os.removedirs(output_dir + '/model_files')
+
+            tf.saved_model.simple_save(sess,
+                                       export_dir=output_dir + '/model_files',
+                                       inputs={"audio_input": audio_input,
+                                               "ground_truth_input": ground_truth_input,
+                                               "is_training": is_training},
+                                       outputs={"prediction": prediction})
 
     return loss_list, dev_loss_list
 
