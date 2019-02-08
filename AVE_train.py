@@ -33,10 +33,11 @@ print("TensorFlow version: {}".format(tf.__version__))
 print("Eager execution: {}".format(tf.executing_eagerly()))
 
 def inference_net(audio_frames=None,
-                 seq_length=2,
-                 num_features=640,
-                 latent_dim=50,
-                 is_training=False):
+                  seq_length=2,
+                  num_features=640,
+                  latent_dim=50,
+                  is_training=False):
+
     audio_input = tf.reshape(audio_frames, [-1, 1, 640, 1])
 
     # ### Maybe adding a batchnormalization to normalize input
@@ -118,7 +119,7 @@ def inference_net(audio_frames=None,
 
     net = tf.keras.layers.Flatten()(net) # num_feature // 80 *32
     net = tf.keras.layers.Dense(latent_dim + latent_dim)(net)
-    net = tf.reshape(net, (-1, seq_length, latent_dim + latent_dim)) # -1 -> batch_size
+    net = tf.reshape(net, (-1, latent_dim + latent_dim)) # -1 -> batch_size
 
     return net
 
@@ -132,7 +133,7 @@ def generative_net(audio_frames=None,
     net = tf.keras.layers.Dense(units=num_features//80*32, activation=tf.nn.relu)(latent_input)
     net = tf.reshape(net, [-1, num_features//80, 32, 1])
     net = tf.image.resize_images(images=net,
-                                 size=[1, 1, 8, 1],
+                                 size=[num_features//80, 32*8],
                                  method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
     net = tf.reshape(net, [-1, 1, num_features//80, 256])
     net = tf.keras.layers.Conv2DTranspose(filters=256,
@@ -142,7 +143,7 @@ def generative_net(audio_frames=None,
                                           activation=None,
                                           use_bias=True)(net)
     net = tf.image.resize_images(images=net,
-                                 size=[1, 1, 8, 1],
+                                 size=[1, num_features//80*8],
                                  method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
     net = tf.keras.layers.Conv2DTranspose(filters=128,
                                           kernel_size=(1, 6),
@@ -151,7 +152,7 @@ def generative_net(audio_frames=None,
                                           activation=None,
                                           use_bias=True)(net)
     net = tf.image.resize_images(images=net,
-                                 size=[1, 1, 10, 1],
+                                 size=[1, num_features//80*8*10],
                                  method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
     net = tf.keras.layers.Conv2DTranspose(filters=64,
                                           kernel_size=(1, 8),
@@ -159,42 +160,17 @@ def generative_net(audio_frames=None,
                                           padding="same",
                                           activation=None,
                                           use_bias=True)(net)
-    net = tf.reshape(net, [-1, seq_length, num_features])
+    net = tf.keras.layers.Conv2DTranspose(filters=1,
+                                          kernel_size=(1, 8),
+                                          strides=(1, 1),
+                                          padding="same",
+                                          activation=None,
+                                          use_bias=True)(net)
+    net = tf.reshape(net, [-1, num_features])
     return net
 
 
-class CVAE(tf.keras.Model):
-    def __init__(self, latent_dim, seq_length=2, is_training=False):
-        super(CVAE, self).__init__()
-        self.latent_dim = latent_dim
-        self.inference_net = inference_net(seq_length=seq_length,
-                                           num_features=640,
-                                           latent_dim=self.latent_dim,
-                                           is_training=is_training)
-        self.generative_net = generative_net(seq_length=seq_length,
-                                             num_features=640,
-                                             latent_dim=self.latent_dim,
-                                             is_training=is_training)
 
-    def sample(self, eps=None):
-        if eps is None:
-            eps = tf.random_normal(shape=(100, self.latent_dim))
-        return self.decode(eps, apply_sigmoid=True)
-
-    def encode(self, x):
-        mean, logvar = tf.split(self.inference_net(x), num_or_size_splits=2, axis=1)
-        return mean, logvar
-
-    def reparameterize(self, mean, logvar):
-        eps = tf.random_normal(shape=mean.shape)
-        return eps * tf.exp(logvar * .5) + mean
-
-    def decode(self, z, apply_sigmoid=False):
-        logits = self.generative_net(z)
-        if apply_sigmoid:
-            probs = tf.sigmoid(logits)
-            return probs
-        return logits
 
 def train(dataset_dir=None,
           init_learning_rate=0.001,
@@ -207,6 +183,7 @@ def train(dataset_dir=None,
           output_dir='./output_dir'):
 
     total_num = 7500 * 9
+    latent_dim = 50
     loss_list = np.zeros((epochs, int(np.ceil(total_num/seq_length/batch_size))))
     dev_loss_list = np.zeros((epochs, 9)) # 9 files
     g = tf.Graph()
@@ -240,21 +217,27 @@ def train(dataset_dir=None,
         dataset_iter = iterator.get_next()
 
         audio_input = tf.placeholder(dtype=tf.float32,
-                                     shape=[None, 1, 1, num_features],  # Can feed any shape
+                                     shape=[None, 1, seq_length, num_features],  # Can feed any shape
                                      name='audio_input_placeholder')
         # Get the output tensor
-        model = CVAE(latent_dim=50,
-                     seq_length=seq_length,
-                     is_training=True)
+        z = inference_net(audio_frames=audio_input,
+                          seq_length=seq_length,
+                          num_features=num_features,
+                          latent_dim=latent_dim,
+                          is_training=is_training)
 
-        mean, logvar = model.encode(audio_input)
-        z = model.reparameterize(mean, logvar)
-        x_logit = model.decode(z)
+        mean, logvar = tf.split(z, num_or_size_splits=2, axis=1)
 
-        # MSE
-        with tf.name_scope('my_metrics'):
-            mse, mse_update_op = tf.metrics.mean_squared_error(audio_input, x_logit)
-        tf.summary.scalar('metric/mse_{}'.format('reconstruction'), mse)
+        eps = tf.random_normal(shape=tf.shape(mean))
+        z_reparameterized = eps * tf.exp(logvar * .5) + mean
+        x_logit = generative_net(audio_frames=z_reparameterized,
+                                 seq_length=seq_length,
+                                 num_features=num_features,
+                                 latent_dim=latent_dim,
+                                 is_training=is_training)
+        apply_sigmoid = True
+        if apply_sigmoid:
+            x_logit = tf.sigmoid(x_logit)
 
         def log_normal_pdf(sample, mean, logvar, raxis=1):
             log2pi = tf.log(2. * np.pi)
@@ -262,25 +245,12 @@ def train(dataset_dir=None,
                 -.5 * ((sample - mean) ** 2. * tf.exp(-logvar) + logvar + log2pi),
                 axis=raxis)
 
-        def compute_loss(model, x):
-            mean, logvar = model.encode(x)
-            z = model.reparameterize(mean, logvar)
-            x_logit = model.decode(z)
-
-            cross_ent = tf.nn.sigmoid_cross_entropy_with_logits(logits=x_logit, labels=x)
-            logpx_z = -tf.reduce_sum(cross_ent, axis=[1, 2, 3, 4])
-            logpz = log_normal_pdf(z, 0., 0.)
-            logqz_x = log_normal_pdf(z, mean, logvar)
-            re_total_loss = -tf.reduce_mean(logpx_z + logpz - logqz_x)
-            return re_total_loss
-
-        def compute_gradients(model, x):
-            with tf.GradientTape() as tape:
-                loss = compute_loss(model, x)
-            return tape.gradient(loss, model.trainable_variables), loss
-
-        def apply_gradients(optimizer, gradients, variables, global_step=None):
-            optimizer.apply_gradients(zip(gradients, variables), global_step=global_step)
+        x_reshaped = tf.reshape(audio_input, [-1, num_features])
+        cross_ent = tf.nn.sigmoid_cross_entropy_with_logits(logits=x_logit, labels=x_reshaped)
+        logpx_z = -tf.reduce_sum(cross_ent, axis=1)
+        logpz = log_normal_pdf(z_reparameterized, 0., 0.)
+        logqz_x = log_normal_pdf(z_reparameterized, mean, logvar)
+        total_loss = -tf.reduce_mean(logpx_z + logpz - logqz_x)
 
         # Learning rate decay
         global_step = tf.Variable(0, trainable=False)
@@ -298,10 +268,16 @@ def train(dataset_dir=None,
             learning_rate = init_learning_rate
 
         # Define the optimizer
-        total_loss = compute_loss(model, audio_input)
         tf.summary.scalar('losses/total_loss', total_loss)
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
         train = optimizer.minimize(total_loss)
+
+
+        # MSE
+        with tf.name_scope('my_metrics'):
+            audio_input_reshaped = tf.reshape(audio_input, [-1, num_features])
+            mse, mse_update_op = tf.metrics.mean_squared_error(audio_input_reshaped, x_logit)
+        tf.summary.scalar('metric/mse_{}'.format('reconstruction'), mse)
 
         # Metrics initializer
         metrics_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="my_metrics")
@@ -413,9 +389,12 @@ def train(dataset_dir=None,
             tf.saved_model.simple_save(sess,
                                        export_dir=output_dir + '/model_files',
                                        inputs={"audio_input": audio_input,
-                                               "ground_truth_input": ground_truth_input,
                                                "is_training": is_training},
-                                       outputs={"prediction": prediction})
+                                       outputs={"z": z,
+                                                "z_parameterized": z_reparameterized,
+                                                "x_logit": x_logit,
+                                                "mean": mean,
+                                                "logvar": logvar})
 
     return loss_list, dev_loss_list
 
