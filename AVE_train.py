@@ -270,7 +270,8 @@ def train(dataset_dir=None,
                           is_training=is_training)
 
         mean, logvar = tf.split(z, num_or_size_splits=2, axis=2)
-
+        tf.summary.histogram("latent_mean", mean)
+        tf.summary.histogram("latent_logvar", logvar)
         eps = tf.random_normal(shape=tf.shape(mean))
         z_reparameterized = eps * tf.exp(logvar * .5) + mean
         x_logit = generative_net(audio_frames=z_reparameterized,
@@ -281,6 +282,11 @@ def train(dataset_dir=None,
         apply_sigmoid = True
         if apply_sigmoid:
             x_logit = tf.sigmoid(x_logit)
+
+        tf.summary.audio("reconstruction_audio",
+                         tf.reshape(x_logit, (-1,)),
+                         sample_rate=16000,
+                         max_outputs=5)
 
         def log_normal_pdf(sample, mean, logvar, raxis=[1,2]):
             # sample = tf.reshape(sample, (-1, latent_dim))
