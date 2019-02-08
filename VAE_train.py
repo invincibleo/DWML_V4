@@ -1,7 +1,7 @@
 # @Time    : 08/02/2019
 # @Author  : invincibleo
 # @Site    : https://iiw.kuleuven.be/onderzoek/emedia/people/phd-students/duoweitang
-# @File    : AVE_train.py
+# @File    : VAE_train.py
 # @Software: PyCharm
 # Reference: https://wiseodd.github.io/techblog/2016/12/10/variational-autoencoder/
 # De-convolution: https://towardsdatascience.com/up-sampling-with-transposed-convolution-9ae4f2df52d0
@@ -284,7 +284,7 @@ def train(dataset_dir=None,
             x_logit = tf.sigmoid(x_logit)
 
         tf.summary.audio("reconstruction_audio",
-                         tf.reshape(x_logit, (-1,)),
+                         tf.reshape(x_logit, (batch_size, -1)),
                          sample_rate=16000,
                          max_outputs=5)
 
