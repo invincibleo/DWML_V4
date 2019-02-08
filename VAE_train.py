@@ -288,7 +288,7 @@ def train(dataset_dir=None,
                          sample_rate=16000,
                          max_outputs=5)
 
-        def log_normal_pdf(sample, mean, logvar, raxis=[1,2]):
+        def log_normal_pdf(sample, mean, logvar, raxis=[1, 2]):
             # sample = tf.reshape(sample, (-1, latent_dim))
             log2pi = tf.log(2. * np.pi)
             log_pdf = tf.reduce_sum(-.5 * ((sample - mean) ** 2. * tf.exp(-logvar) + logvar + log2pi),
@@ -302,7 +302,7 @@ def train(dataset_dir=None,
         logpx_z = -tf.reduce_sum(cross_ent, axis=[1, 2, 3])
         logpz = log_normal_pdf(z_reparameterized, 0., 0.)
         logqz_x = log_normal_pdf(z_reparameterized, mean, logvar)
-        total_loss = -tf.reduce_mean(logpx_z + logpz - logqz_x)
+        total_loss = -tf.reduce_mean((logpx_z + logpz - logqz_x)/seq_length)
 
         # Learning rate decay
         global_step = tf.Variable(0, trainable=False)
