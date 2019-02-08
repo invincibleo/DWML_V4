@@ -95,11 +95,12 @@ if __name__ == "__main__":
         prediction_name = model.signature_def[signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY].outputs['prediction'].name
         prediction = tf.get_default_graph().get_tensor_by_name(prediction_name)
 
+        # Load the checkpoint
         saver = tf.train.Saver()
         saver.restore(sess, output_dir + "/model.ckpt-" + str(checkpoint_num))
 
         count_num = 0
-        # Training phase
+        # Testing phase
         try:
             sess.run(test_init_op)
             with tqdm(total=int(total_num / seq_length), desc='Testing') as pbar:
