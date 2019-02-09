@@ -302,8 +302,9 @@ def train(dataset_dir=None,
             return log_pdf
 
         # x_reshaped = tf.reshape(audio_input, [-1,  num_features])
-        cross_ent = tf.nn.sigmoid_cross_entropy_with_logits(logits=x_logit, labels=audio_input)
-        logpx_z = -tf.reduce_sum(cross_ent, axis=[1, 2, 3])
+        # cross_ent = tf.nn.sigmoid_cross_entropy_with_logits(logits=x_logit, labels=audio_input)
+        # logpx_z = -tf.reduce_sum(cross_ent, axis=[1, 2, 3])
+        logpx_z = tf.losses.mean_pairwise_squared_error(predictions=x_logit, labels=audio_input)
         logpz = log_normal_pdf(z_reparameterized, 0., 0.)
         logqz_x = log_normal_pdf(z_reparameterized, mean, logvar)
         total_loss = -tf.reduce_mean((logpx_z + logpz - logqz_x)/seq_length)
