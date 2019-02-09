@@ -290,7 +290,7 @@ def train(dataset_dir=None,
         tf.summary.histogram("reconstruction",
                              tf.reshape(x_logit, (-1, num_features)))
         tf.summary.histogram("ground_truth",
-                             tf.reshape(x, (-1, num_features)))
+                             tf.reshape(audio_input, (-1, num_features)))
 
         def log_normal_pdf(sample, mean, logvar, raxis=[1, 2]):
             # sample = tf.reshape(sample, (-1, latent_dim))
