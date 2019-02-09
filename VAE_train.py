@@ -279,7 +279,7 @@ def train(dataset_dir=None,
                                  num_features=num_features,
                                  latent_dim=latent_dim,
                                  is_training=is_training)
-        apply_sigmoid = True
+        apply_sigmoid = False
         if apply_sigmoid:
             x_logit = tf.sigmoid(x_logit)
 
@@ -287,6 +287,10 @@ def train(dataset_dir=None,
                          tf.reshape(x_logit, (batch_size, -1)),
                          sample_rate=16000,
                          max_outputs=5)
+        tf.summary.histogram("reconstruction",
+                             tf.reshape(x_logit, (-1, num_features)))
+        tf.summary.histogram("ground_truth",
+                             tf.reshape(x, (-1, num_features)))
 
         def log_normal_pdf(sample, mean, logvar, raxis=[1, 2]):
             # sample = tf.reshape(sample, (-1, latent_dim))
@@ -304,6 +308,10 @@ def train(dataset_dir=None,
         logqz_x = log_normal_pdf(z_reparameterized, mean, logvar)
         total_loss = -tf.reduce_mean((logpx_z + logpz - logqz_x)/seq_length)
 
+        tf.summary.histogram('losses/logpx_z', logpx_z)
+        tf.summary.histogram('losses/logpz', logpz)
+        tf.summary.histogram('losses/logqz_x', logqz_x)
+        tf.summary.scalar('losses/total_loss', total_loss)
         # Learning rate decay
         global_step = tf.Variable(0, trainable=False)
         if learning_rate_decay is True:
@@ -320,7 +328,6 @@ def train(dataset_dir=None,
             learning_rate = init_learning_rate
 
         # Define the optimizer
-        tf.summary.scalar('losses/total_loss', total_loss)
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
         train = optimizer.minimize(total_loss)
 
