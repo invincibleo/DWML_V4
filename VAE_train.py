@@ -119,19 +119,20 @@ def inference_net(audio_frames=None,
                                 training=is_training,
                                 name='Dropout_3')
 
-        net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32)) # -1 -> batch_size
-        stacked_lstm = []
-        for iiLyr in range(2):
-            stacked_lstm.append(
-                tf.nn.rnn_cell.LSTMCell(num_units=hidden_units, use_peepholes=True, cell_clip=100, state_is_tuple=True))
-        stacked_lstm = tf.nn.rnn_cell.MultiRNNCell(cells=stacked_lstm, state_is_tuple=True)
+        # net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32)) # -1 -> batch_size
+        # stacked_lstm = []
+        # for iiLyr in range(2):
+        #     stacked_lstm.append(
+        #         tf.nn.rnn_cell.LSTMCell(num_units=hidden_units, use_peepholes=True, cell_clip=100, state_is_tuple=True))
+        # stacked_lstm = tf.nn.rnn_cell.MultiRNNCell(cells=stacked_lstm, state_is_tuple=True)
+        #
+        # # We have to specify the dimensionality of the Tensor so we can allocate
+        # # weights for the fully connected layers.
+        # outputs, _ = tf.nn.dynamic_rnn(stacked_lstm, net, dtype=tf.float32)
+        #
+        # net = tf.reshape(outputs, (-1, hidden_units)) # -1 -> batch_size*seq_length
 
-        # We have to specify the dimensionality of the Tensor so we can allocate
-        # weights for the fully connected layers.
-        outputs, _ = tf.nn.dynamic_rnn(stacked_lstm, net, dtype=tf.float32)
-
-        net = tf.reshape(outputs, (-1, hidden_units)) # -1 -> batch_size*seq_length
-
+        net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32))
         net = tf.keras.layers.Dense(latent_dim + latent_dim)(net)
         net = tf.reshape(net, (-1, seq_length, latent_dim + latent_dim)) # -1 -> batch_size
 
@@ -147,22 +148,22 @@ def generative_net(audio_frames=None,
     with tf.variable_scope("Decoder"):
         latent_input = tf.reshape(audio_frames, [-1, latent_dim])
         net = tf.keras.layers.Dense(units=num_features//80*32, activation=tf.nn.relu)(latent_input)
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='de_Dropout_3')
+        # net = tf.layers.dropout(net,
+        #                         rate=0.5,
+        #                         training=is_training,
+        #                         name='de_Dropout_3')
+        #
+        # net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32))
+        #
+        # stacked_lstm_de = []
+        # for iiLyr in range(2):
+        #     stacked_lstm_de.append(
+        #         tf.nn.rnn_cell.LSTMCell(num_units=hidden_units, use_peepholes=True, cell_clip=100, state_is_tuple=True))
+        # stacked_lstm_de = tf.nn.rnn_cell.MultiRNNCell(cells=stacked_lstm_de, state_is_tuple=True)
+        # outputs_de, _ = tf.nn.dynamic_rnn(stacked_lstm_de, net, dtype=tf.float32)
 
-        net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32))
-
-        stacked_lstm_de = []
-        for iiLyr in range(2):
-            stacked_lstm_de.append(
-                tf.nn.rnn_cell.LSTMCell(num_units=hidden_units, use_peepholes=True, cell_clip=100, state_is_tuple=True))
-        stacked_lstm_de = tf.nn.rnn_cell.MultiRNNCell(cells=stacked_lstm_de, state_is_tuple=True)
-        outputs_de, _ = tf.nn.dynamic_rnn(stacked_lstm_de, net, dtype=tf.float32)
-
-        net = tf.reshape(outputs_de, (-1, hidden_units))
-        net = tf.keras.layers.Dense(units=num_features // 80 * 32, activation=tf.nn.relu)(net)
+        # net = tf.reshape(outputs_de, (-1, hidden_units))
+        # net = tf.keras.layers.Dense(units=num_features // 80 * 32, activation=tf.nn.relu)(net)
         net = tf.layers.dropout(net,
                                 rate=0.5,
                                 training=is_training,
@@ -304,10 +305,10 @@ def train(dataset_dir=None,
         # x_reshaped = tf.reshape(audio_input, [-1,  num_features])
         # cross_ent = tf.nn.sigmoid_cross_entropy_with_logits(logits=x_logit, labels=audio_input)
         # logpx_z = -tf.reduce_sum(cross_ent, axis=[1, 2, 3])
-        logpx_z = -tf.losses.mean_pairwise_squared_error(predictions=x_logit, labels=audio_input)
+        logpx_z = -tf.losses.mean_squared_error(predictions=x_logit, labels=audio_input)
         logpz = log_normal_pdf(z_reparameterized, 0., 0.)
         logqz_x = log_normal_pdf(z_reparameterized, mean, logvar)
-        total_loss = -tf.reduce_mean((logpz - logqz_x)/seq_length) + logpx_z
+        total_loss = -tf.reduce_mean(logpz - logqz_x) + logpx_z
 
         tf.summary.histogram('losses/logpx_z', logpx_z)
         tf.summary.histogram('losses/logpz', logpz)
