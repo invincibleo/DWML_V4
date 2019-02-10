@@ -308,7 +308,7 @@ def train(dataset_dir=None,
         logpx_z = -tf.losses.mean_squared_error(predictions=x_logit, labels=audio_input)
         logpz = log_normal_pdf(z_reparameterized, 0., 0.)
         logqz_x = log_normal_pdf(z_reparameterized, mean, logvar)
-        total_loss = -tf.reduce_mean(logpz - logqz_x) + logpx_z
+        total_loss = -tf.reduce_mean(logpz - logqz_x) - logpx_z
 
         tf.summary.histogram('losses/logpx_z', logpx_z)
         tf.summary.histogram('losses/logpz', logpz)
