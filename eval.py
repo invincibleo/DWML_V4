@@ -123,7 +123,9 @@ if __name__ == "__main__":
             ground_truth_all = np.reshape(ground_truth_all, (-1, 2))
             prediction_all = np.reshape(prediction_all, (-1, 2))
 
-
+plt.plot(ground_truth_all[:, 0])
+plt.plot(prediction_all[:, 0])
+plt.show()
 
 
 
