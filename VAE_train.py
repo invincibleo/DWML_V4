@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # @Time    : 08/02/2019
 # @Author  : invincibleo
 # @Site    : https://iiw.kuleuven.be/onderzoek/emedia/people/phd-students/duoweitang
@@ -448,10 +449,10 @@ def train(dataset_dir=None,
                           'Validation valence MSE: {}\n'.format(val_loss,
                                                                 val_mse))
                     val_writer.add_summary(summary, epoch_no)
-                    val_new_metric = [-val_mse]
+                    val_new_metric = [val_mse]
 
                 # Have some penalty for the large shoot at beginning
-                if val_new_metric >= [x*0.9 for x in val_old_metric]:
+                if val_new_metric <= [x*0.9 for x in val_old_metric]:
                     # Save the model
                     save_path = modal_saver.save(sess,
                                                  save_path=output_dir + "/model.ckpt",
