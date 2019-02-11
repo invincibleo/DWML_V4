@@ -374,7 +374,7 @@ def train(dataset_dir=None,
             # modal_saver_loader.restore(sess, output_dir + "/model.ckpt-" + str(199))
 
             # Epochs
-            val_old_metric, val_new_metric = [0.0, 0.0], [0.0, 0.0]
+            val_old_metric, val_new_metric = [np.inf], [0]
             for epoch_no in range(epochs):
                 print('\nEpoch No: {}'.format(epoch_no))
                 train_loss, val_loss = 0.0, 0.0
