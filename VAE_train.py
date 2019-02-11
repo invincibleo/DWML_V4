@@ -6,6 +6,10 @@
 # Reference: https://wiseodd.github.io/techblog/2016/12/10/variational-autoencoder/
 # De-convolution: https://towardsdatascience.com/up-sampling-with-transposed-convolution-9ae4f2df52d0
 # Eager_implementation: https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/contrib/eager/python/examples/generative_examples/cvae.ipynb
+# Get Global_variable in a graph: https://stackoverflow.com/questions/36533723/tensorflow-get-all-variables-in-scope/36536063
+# Check all vars in checkpoints
+    # from tensorflow.python.tools import inspect_checkpoint as chkp
+    # chkp.print_tensors_in_checkpoint_file(output_dir + "/model.ckpt-" + str(31), tensor_name='', all_tensors=True)
 
 from __future__ import absolute_import, division, print_function
 
@@ -38,105 +42,104 @@ def inference_net(audio_frames=None,
                   num_features=640,
                   latent_dim=50,
                   is_training=False):
+    # with tf.variable_scope("Encoder"):
+    audio_input = tf.reshape(audio_frames, [-1, 1, 640, 1])
 
-    with tf.variable_scope("Encoder"):
-        audio_input = tf.reshape(audio_frames, [-1, 1, 640, 1])
+    # ### Maybe adding a batchnormalization to normalize input
+    # All conv2d should be SAME padding
+    # net = tf.layers.dropout(audio_input,
+    #                         rate=0.5,
+    #                         training=is_training,
+    #                         name='Input_Dropout')
+    net = tf.layers.conv2d(audio_input,
+                           filters=64,
+                           kernel_size=(1, 8),
+                           strides=(1, 1),
+                           padding='same',
+                           data_format='channels_last',
+                           activation=None,
+                           use_bias=True,
+                           name='Conv2d_1')
 
-        # ### Maybe adding a batchnormalization to normalize input
-        # All conv2d should be SAME padding
-        # net = tf.layers.dropout(audio_input,
-        #                         rate=0.5,
-        #                         training=is_training,
-        #                         name='Input_Dropout')
-        net = tf.layers.conv2d(audio_input,
-                               filters=64,
-                               kernel_size=(1, 8),
-                               strides=(1, 1),
-                               padding='same',
-                               data_format='channels_last',
-                               activation=None,
-                               use_bias=True,
-                               name='Conv2d_1')
+    net = tf.nn.max_pool(
+        net,
+        ksize=[1, 1, 10, 1],
+        strides=[1, 1, 10, 1],
+        padding='SAME',
+        name='Maxpooling_1')
 
-        net = tf.nn.max_pool(
-            net,
-            ksize=[1, 1, 10, 1],
-            strides=[1, 1, 10, 1],
-            padding='SAME',
-            name='Maxpooling_1')
+    net = tf.layers.dropout(net,
+                            rate=0.5,
+                            training=is_training,
+                            name='Dropout_1')
 
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='Dropout_1')
+    # Original model had 400 output filters for the second conv layer
+    # but this trains much faster and achieves comparable accuracy.
+    net = tf.layers.conv2d(net,
+                           filters=128,
+                           kernel_size=(1, 6),
+                           strides=(1, 1),
+                           padding='same',
+                           data_format='channels_last',
+                           activation=None,
+                           use_bias=True,
+                           name='Conv2d_2')
 
-        # Original model had 400 output filters for the second conv layer
-        # but this trains much faster and achieves comparable accuracy.
-        net = tf.layers.conv2d(net,
-                               filters=128,
-                               kernel_size=(1, 6),
-                               strides=(1, 1),
-                               padding='same',
-                               data_format='channels_last',
-                               activation=None,
-                               use_bias=True,
-                               name='Conv2d_2')
+    net = tf.nn.max_pool(
+        net,
+        ksize=[1, 1, 8, 1],
+        strides=[1, 1, 8, 1],
+        padding='SAME',
+        name='Maxpooling_2')
 
-        net = tf.nn.max_pool(
-            net,
-            ksize=[1, 1, 8, 1],
-            strides=[1, 1, 8, 1],
-            padding='SAME',
-            name='Maxpooling_2')
+    net = tf.layers.dropout(net,
+                            rate=0.5,
+                            training=is_training,
+                            name='Dropout_2')
 
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='Dropout_2')
+    net = tf.layers.conv2d(net,
+                           filters=256,
+                           kernel_size=(1, 6),
+                           strides=(1, 1),
+                           padding='same',
+                           data_format='channels_last',
+                           activation=None,
+                           use_bias=True,
+                           name='Conv2d_3')
 
-        net = tf.layers.conv2d(net,
-                               filters=256,
-                               kernel_size=(1, 6),
-                               strides=(1, 1),
-                               padding='same',
-                               data_format='channels_last',
-                               activation=None,
-                               use_bias=True,
-                               name='Conv2d_3')
+    net = tf.reshape(net, (-1, num_features // 80, 256, 1)) # -1 -> batch_size*seq_length
 
-        net = tf.reshape(net, (-1, num_features // 80, 256, 1)) # -1 -> batch_size*seq_length
+    # Pooling over the feature maps.
+    net = tf.nn.max_pool(
+        net,
+        ksize=[1, 1, 8, 1],
+        strides=[1, 1, 8, 1],
+        padding='SAME',
+        name='Maxpooling_3')
 
-        # Pooling over the feature maps.
-        net = tf.nn.max_pool(
-            net,
-            ksize=[1, 1, 8, 1],
-            strides=[1, 1, 8, 1],
-            padding='SAME',
-            name='Maxpooling_3')
+    net = tf.layers.dropout(net,
+                            rate=0.5,
+                            training=is_training,
+                            name='Dropout_3')
 
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='Dropout_3')
+    # net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32)) # -1 -> batch_size
+    # stacked_lstm = []
+    # for iiLyr in range(2):
+    #     stacked_lstm.append(
+    #         tf.nn.rnn_cell.LSTMCell(num_units=hidden_units, use_peepholes=True, cell_clip=100, state_is_tuple=True))
+    # stacked_lstm = tf.nn.rnn_cell.MultiRNNCell(cells=stacked_lstm, state_is_tuple=True)
+    #
+    # # We have to specify the dimensionality of the Tensor so we can allocate
+    # # weights for the fully connected layers.
+    # outputs, _ = tf.nn.dynamic_rnn(stacked_lstm, net, dtype=tf.float32)
+    #
+    # net = tf.reshape(outputs, (-1, hidden_units)) # -1 -> batch_size*seq_length
 
-        # net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32)) # -1 -> batch_size
-        # stacked_lstm = []
-        # for iiLyr in range(2):
-        #     stacked_lstm.append(
-        #         tf.nn.rnn_cell.LSTMCell(num_units=hidden_units, use_peepholes=True, cell_clip=100, state_is_tuple=True))
-        # stacked_lstm = tf.nn.rnn_cell.MultiRNNCell(cells=stacked_lstm, state_is_tuple=True)
-        #
-        # # We have to specify the dimensionality of the Tensor so we can allocate
-        # # weights for the fully connected layers.
-        # outputs, _ = tf.nn.dynamic_rnn(stacked_lstm, net, dtype=tf.float32)
-        #
-        # net = tf.reshape(outputs, (-1, hidden_units)) # -1 -> batch_size*seq_length
+    net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32))
+    net = tf.keras.layers.Dense(latent_dim + latent_dim)(net)
+    net = tf.reshape(net, (-1, seq_length, latent_dim + latent_dim)) # -1 -> batch_size
 
-        net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32))
-        net = tf.keras.layers.Dense(latent_dim + latent_dim)(net)
-        net = tf.reshape(net, (-1, seq_length, latent_dim + latent_dim)) # -1 -> batch_size
-
-        return net
+    return net
 
 def generative_net(audio_frames=None,
                    hidden_units=256,
@@ -144,76 +147,76 @@ def generative_net(audio_frames=None,
                    num_features=640,
                    latent_dim=50,
                    is_training=False):
+    with tf.name_scope("Decoder"):
+        with tf.variable_scope("Decoder"):
+            latent_input = tf.reshape(audio_frames, [-1, latent_dim])
+            net = tf.keras.layers.Dense(units=num_features//80*32, activation=tf.nn.relu)(latent_input)
+            # net = tf.layers.dropout(net,
+            #                         rate=0.5,
+            #                         training=is_training,
+            #                         name='de_Dropout_3')
+            #
+            # net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32))
+            #
+            # stacked_lstm_de = []
+            # for iiLyr in range(2):
+            #     stacked_lstm_de.append(
+            #         tf.nn.rnn_cell.LSTMCell(num_units=hidden_units, use_peepholes=True, cell_clip=100, state_is_tuple=True))
+            # stacked_lstm_de = tf.nn.rnn_cell.MultiRNNCell(cells=stacked_lstm_de, state_is_tuple=True)
+            # outputs_de, _ = tf.nn.dynamic_rnn(stacked_lstm_de, net, dtype=tf.float32)
 
-    with tf.variable_scope("Decoder"):
-        latent_input = tf.reshape(audio_frames, [-1, latent_dim])
-        net = tf.keras.layers.Dense(units=num_features//80*32, activation=tf.nn.relu)(latent_input)
-        # net = tf.layers.dropout(net,
-        #                         rate=0.5,
-        #                         training=is_training,
-        #                         name='de_Dropout_3')
-        #
-        # net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32))
-        #
-        # stacked_lstm_de = []
-        # for iiLyr in range(2):
-        #     stacked_lstm_de.append(
-        #         tf.nn.rnn_cell.LSTMCell(num_units=hidden_units, use_peepholes=True, cell_clip=100, state_is_tuple=True))
-        # stacked_lstm_de = tf.nn.rnn_cell.MultiRNNCell(cells=stacked_lstm_de, state_is_tuple=True)
-        # outputs_de, _ = tf.nn.dynamic_rnn(stacked_lstm_de, net, dtype=tf.float32)
+            # net = tf.reshape(outputs_de, (-1, hidden_units))
+            # net = tf.keras.layers.Dense(units=num_features // 80 * 32, activation=tf.nn.relu)(net)
+            net = tf.layers.dropout(net,
+                                    rate=0.5,
+                                    training=is_training,
+                                    name='de_Dropout_2')
 
-        # net = tf.reshape(outputs_de, (-1, hidden_units))
-        # net = tf.keras.layers.Dense(units=num_features // 80 * 32, activation=tf.nn.relu)(net)
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='de_Dropout_2')
-
-        net = tf.reshape(net, [-1, num_features//80, 32, 1])
-        net = tf.image.resize_images(images=net,
-                                     size=[num_features//80, 32*8],
-                                     method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        net = tf.reshape(net, [-1, 1, num_features//80, 256])
-        net = tf.keras.layers.Conv2DTranspose(filters=256,
-                                              kernel_size=(1, 6),
-                                              strides=(1, 1),
-                                              padding="same",
-                                              activation=None,
-                                              use_bias=True)(net)
-        net = tf.image.resize_images(images=net,
-                                     size=[1, num_features//80*8],
-                                     method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='de_Dropout_1')
-        net = tf.keras.layers.Conv2DTranspose(filters=128,
-                                              kernel_size=(1, 6),
-                                              strides=(1, 1),
-                                              padding="same",
-                                              activation=None,
-                                              use_bias=True)(net)
-        net = tf.image.resize_images(images=net,
-                                     size=[1, num_features//80*8*10],
-                                     method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='de_Dropout_0')
-        net = tf.keras.layers.Conv2DTranspose(filters=64,
-                                              kernel_size=(1, 8),
-                                              strides=(1, 1),
-                                              padding="same",
-                                              activation=None,
-                                              use_bias=True)(net)
-        net = tf.keras.layers.Conv2DTranspose(filters=1,
-                                              kernel_size=(1, 8),
-                                              strides=(1, 1),
-                                              padding="same",
-                                              activation=None,
-                                              use_bias=True)(net)
-        net = tf.reshape(net, [-1, 1, seq_length, num_features])
-        return net
+            net = tf.reshape(net, [-1, num_features//80, 32, 1])
+            net = tf.image.resize_images(images=net,
+                                         size=[num_features//80, 32*8],
+                                         method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+            net = tf.reshape(net, [-1, 1, num_features//80, 256])
+            net = tf.keras.layers.Conv2DTranspose(filters=256,
+                                                  kernel_size=(1, 6),
+                                                  strides=(1, 1),
+                                                  padding="same",
+                                                  activation=None,
+                                                  use_bias=True)(net)
+            net = tf.image.resize_images(images=net,
+                                         size=[1, num_features//80*8],
+                                         method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+            net = tf.layers.dropout(net,
+                                    rate=0.5,
+                                    training=is_training,
+                                    name='de_Dropout_1')
+            net = tf.keras.layers.Conv2DTranspose(filters=128,
+                                                  kernel_size=(1, 6),
+                                                  strides=(1, 1),
+                                                  padding="same",
+                                                  activation=None,
+                                                  use_bias=True)(net)
+            net = tf.image.resize_images(images=net,
+                                         size=[1, num_features//80*8*10],
+                                         method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+            net = tf.layers.dropout(net,
+                                    rate=0.5,
+                                    training=is_training,
+                                    name='de_Dropout_0')
+            net = tf.keras.layers.Conv2DTranspose(filters=64,
+                                                  kernel_size=(1, 8),
+                                                  strides=(1, 1),
+                                                  padding="same",
+                                                  activation=None,
+                                                  use_bias=True)(net)
+            net = tf.keras.layers.Conv2DTranspose(filters=1,
+                                                  kernel_size=(1, 8),
+                                                  strides=(1, 1),
+                                                  padding="same",
+                                                  activation=None,
+                                                  use_bias=True)(net)
+            net = tf.reshape(net, [-1, 1, seq_length, num_features])
+            return net
 
 
 def train(dataset_dir=None,
@@ -315,6 +318,15 @@ def train(dataset_dir=None,
         tf.summary.histogram('losses/analytical_KL', analytical_kl)
         tf.summary.histogram('losses/mean(logqz_x-logpz)', tf.reduce_mean(logqz_x - logpz))
         tf.summary.scalar('losses/total_loss', total_loss)
+
+        # Visualize all weights and bias
+        var_visual_list = []
+        for var in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="Conv2d"):
+            if "kernel" or "bias" in var.name:
+                var_visual_list.append(var)
+        for var in var_visual_list:
+            tf.summary.histogram(var.name, var)
+
         # Learning rate decay
         global_step = tf.Variable(0, trainable=False)
         if learning_rate_decay is True:
@@ -367,6 +379,11 @@ def train(dataset_dir=None,
                 training_init_op = iterator.make_initializer(train_ds)
                 dev_init_op = iterator.make_initializer(dev_ds)
 
+                # Load the checkpoint for specific variables
+                # loading_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="Conv2d")
+                # modal_saver_loader = tf.train.Saver(var_list=loading_var_list[0:5])
+                # modal_saver_loader.restore(sess, output_dir + "/model.ckpt-" + str(199))
+
                 # Get the learning_rate if learning_rate_decay = True
                 if learning_rate_decay is True:
                     _, rate = sess.run([add_global, learning_rate])
@@ -389,6 +406,7 @@ def train(dataset_dir=None,
                                                            feed_dict={audio_input: features_value,
                                                                       is_training: True})
                             train_loss += loss
+                            print("CNM{}".format(loss))
                             loss_list[epoch_no, count_num_train] = loss
                             pbar.update(batch_size)
                             count_num_train += 1
