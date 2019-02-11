@@ -305,14 +305,15 @@ def train(dataset_dir=None,
         # x_reshaped = tf.reshape(audio_input, [-1,  num_features])
         # cross_ent = tf.nn.sigmoid_cross_entropy_with_logits(logits=x_logit, labels=audio_input)
         # logpx_z = -tf.reduce_sum(cross_ent, axis=[1, 2, 3])
-        logpx_z = -tf.losses.mean_squared_error(predictions=x_logit, labels=audio_input)
+        logpx_z = tf.losses.mean_squared_error(predictions=x_logit, labels=audio_input)
         logpz = log_normal_pdf(z_reparameterized, 0., 0.)
         logqz_x = log_normal_pdf(z_reparameterized, mean, logvar)
-        total_loss = -tf.reduce_mean(logpz - logqz_x) - logpx_z
+        analytical_kl = 0.5 * tf.reduce_sum(tf.exp(logvar) + tf.square(mean) - 1. - logvar, axis=2)
+        total_loss = tf.reduce_mean(analytical_kl) + logpx_z # tf.reduce_mean(logqz_x - logpz)
 
         tf.summary.histogram('losses/logpx_z', logpx_z)
-        tf.summary.histogram('losses/logpz', logpz)
-        tf.summary.histogram('losses/logqz_x', logqz_x)
+        tf.summary.histogram('losses/analytical_KL', analytical_kl)
+        tf.summary.histogram('losses/mean(logqz_x-logpz)', tf.reduce_mean(logqz_x - logpz))
         tf.summary.scalar('losses/total_loss', total_loss)
         # Learning rate decay
         global_step = tf.Variable(0, trainable=False)
