@@ -261,13 +261,22 @@ def train(dataset_dir=None,
                          sample_rate=16000,
                          max_outputs=5)
 
-        stfts = tf.contrib.signal.stft(tf.reshape(x_logit, (batch_size, -1)),
+        # Generating power spectrogram
+        stfts = tf.contrib.signal.stft(tf.reshape(audio_input, (batch_size, -1)),
                                        frame_length=1024,
                                        frame_step=512,
                                        fft_length=1024)
-
+        stfts_reconstruction = tf.contrib.signal.stft(tf.reshape(x_logit, (batch_size, -1)),
+                                       frame_length=1024,
+                                       frame_step=512,
+                                       fft_length=1024)
         power_spectrograms = tf.real(stfts * tf.conj(stfts))
+        power_spectrograms_re = tf.real(stfts_reconstruction * tf.conj(stfts_reconstruction))
         power_spectrograms = tf.expand_dims(power_spectrograms, axis=3)
+        power_spectrograms = tf.transpose(power_spectrograms, (0, 2, 1, 3))
+        power_spectrograms_re = tf.expand_dims(power_spectrograms_re, axis=3)
+        power_spectrograms_re = tf.transpose(power_spectrograms_re, (0, 2, 1, 3))
+        power_spectrograms = tf.concat([power_spectrograms, power_spectrograms_re], axis=2)
 
         tf.summary.image("Power_Spectrogram", power_spectrograms)
         tf.summary.histogram("reconstruction",
@@ -321,7 +330,7 @@ def train(dataset_dir=None,
             merged = tf.summary.merge_all()
             train_writer = tf.summary.FileWriter(output_dir + '/log/train/', sess.graph)
             val_writer = tf.summary.FileWriter(output_dir + '/log/validation/')
-            modal_saver = tf.train.Saver(max_to_keep=10)
+            modal_saver = tf.train.Saver(max_to_keep=50)
 
             # Initialize the variables
             sess.run(tf.global_variables_initializer())
@@ -362,7 +371,7 @@ def train(dataset_dir=None,
                                                             total_loss,
                                                             merged,
                                                             mse_update_op,
-                                                            power_spectrograms),
+                                                            power_spectrograms_re),
                                                            feed_dict={audio_input: features_value,
                                                                       is_training: True})
                             train_loss += loss
@@ -391,7 +400,7 @@ def train(dataset_dir=None,
                             loss, summary, _, _ = sess.run((total_loss,
                                                          merged,
                                                          mse_update_op,
-                                                         power_spectrograms),
+                                                         power_spectrograms_re),
                                                         feed_dict={audio_input: features_value,
                                                                    is_training: False})
                             val_loss += loss
@@ -438,6 +447,12 @@ def train(dataset_dir=None,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--dataset_dir',
+        type=str,
+        default='./tf_records',
+        help='Path to the tensorflow records dataset'
+    )
     parser.add_argument(
         '--output_dir',
         type=str,
@@ -489,7 +504,7 @@ if __name__ == "__main__":
     FLAGS, unparsed = parser.parse_known_args()
 
     output_dir = FLAGS.output_dir
-    loss_list, dev_loss_list = train(Path("./tf_records"),
+    loss_list, dev_loss_list = train(Path(FLAGS.dataset_dir),
                                      init_learning_rate=FLAGS.learning_rate,
                                      learning_rate_decay=FLAGS.learning_rate_decay,
                                      seq_length=FLAGS.seq_length,
