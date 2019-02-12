@@ -45,99 +45,19 @@ def inference_net(audio_frames=None,
                   latent_dim=50,
                   is_training=False):
     with tf.variable_scope("Encoder"):
-        audio_input = tf.reshape(audio_frames, [-1, 1, 640, 1])
-
-        # ### Maybe adding a batchnormalization to normalize input
-        # All conv2d should be SAME padding
-        # net = tf.layers.dropout(audio_input,
-        #                         rate=0.5,
-        #                         training=is_training,
-        #                         name='Input_Dropout')
-        net = tf.layers.conv2d(audio_input,
-                               filters=64,
-                               kernel_size=(1, 8),
-                               strides=(1, 1),
-                               padding='same',
-                               data_format='channels_last',
-                               activation=None,
-                               use_bias=True,
-                               name='Conv2d_1')
-
-        net = tf.nn.max_pool(
-            net,
-            ksize=[1, 1, 10, 1],
-            strides=[1, 1, 10, 1],
-            padding='SAME',
-            name='Maxpooling_1')
-
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='Dropout_1')
-
-        # Original model had 400 output filters for the second conv layer
-        # but this trains much faster and achieves comparable accuracy.
-        net = tf.layers.conv2d(net,
-                               filters=128,
-                               kernel_size=(1, 6),
-                               strides=(1, 1),
-                               padding='same',
-                               data_format='channels_last',
-                               activation=None,
-                               use_bias=True,
-                               name='Conv2d_2')
-
-        net = tf.nn.max_pool(
-            net,
-            ksize=[1, 1, 8, 1],
-            strides=[1, 1, 8, 1],
-            padding='SAME',
-            name='Maxpooling_2')
-
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='Dropout_2')
-
-        net = tf.layers.conv2d(net,
-                               filters=256,
-                               kernel_size=(1, 6),
-                               strides=(1, 1),
-                               padding='same',
-                               data_format='channels_last',
-                               activation=None,
-                               use_bias=True,
-                               name='Conv2d_3')
-
-        net = tf.reshape(net, (-1, num_features // 80, 256, 1)) # -1 -> batch_size*seq_length
-
-        # Pooling over the feature maps.
-        net = tf.nn.max_pool(
-            net,
-            ksize=[1, 1, 8, 1],
-            strides=[1, 1, 8, 1],
-            padding='SAME',
-            name='Maxpooling_3')
-
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='Dropout_3')
-
-        # net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32)) # -1 -> batch_size
-        # stacked_lstm = []
-        # for iiLyr in range(2):
-        #     stacked_lstm.append(
-        #         tf.nn.rnn_cell.LSTMCell(num_units=hidden_units, use_peepholes=True, cell_clip=100, state_is_tuple=True))
-        # stacked_lstm = tf.nn.rnn_cell.MultiRNNCell(cells=stacked_lstm, state_is_tuple=True)
-        #
-        # # We have to specify the dimensionality of the Tensor so we can allocate
-        # # weights for the fully connected layers.
-        # outputs, _ = tf.nn.dynamic_rnn(stacked_lstm, net, dtype=tf.float32)
-        #
-        # net = tf.reshape(outputs, (-1, hidden_units)) # -1 -> batch_size*seq_length
-
-        net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32))
+        audio_input = tf.reshape(audio_frames, [-1, 640])
+        net = tf.layers.Dense(4*num_features,
+                              activation=tf.nn.relu)(audio_input)
+        net = tf.layers.dropout(net, rate=0.5)
+        # net = tf.layers.batch_normalization(net)
+        net = tf.layers.Dense(3*num_features,
+                              activation=tf.nn.relu)(net)
+        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.Dense(2*num_features,
+                              activation=tf.nn.relu)(net)
+        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.Dense(256,
+                              activation=tf.nn.relu)(net)
 
         return net
 
@@ -148,50 +68,16 @@ def generative_net(audio_frames=None,
                    latent_dim=50,
                    is_training=False):
     with tf.variable_scope("Decoder"):
-        net = tf.reshape(audio_frames, [-1, num_features//80, 32, 1])
-        net = tf.image.resize_images(images=net,
-                                     size=[num_features//80, 32*8],
-                                     method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        net = tf.reshape(net, [-1, 1, num_features//80, 256])
-        net = tf.keras.layers.Conv2DTranspose(filters=256,
-                                              kernel_size=(1, 6),
-                                              strides=(1, 1),
-                                              padding="same",
-                                              activation=None,
-                                              use_bias=True)(net)
-        net = tf.image.resize_images(images=net,
-                                     size=[1, num_features//80*8],
-                                     method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='de_Dropout_1')
-        net = tf.keras.layers.Conv2DTranspose(filters=128,
-                                              kernel_size=(1, 6),
-                                              strides=(1, 1),
-                                              padding="same",
-                                              activation=None,
-                                              use_bias=True)(net)
-        net = tf.image.resize_images(images=net,
-                                     size=[1, num_features//80*8*10],
-                                     method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='de_Dropout_0')
-        net = tf.keras.layers.Conv2DTranspose(filters=64,
-                                              kernel_size=(1, 8),
-                                              strides=(1, 1),
-                                              padding="same",
-                                              activation=None,
-                                              use_bias=True)(net)
-        net = tf.keras.layers.Conv2DTranspose(filters=1,
-                                              kernel_size=(1, 8),
-                                              strides=(1, 1),
-                                              padding="same",
-                                              activation=None,
-                                              use_bias=True)(net)
-        net = tf.reshape(net, [-1, 1, seq_length, num_features])
+        net = tf.layers.Dense(2*num_features,
+                              activation=tf.nn.relu)(audio_frames)
+        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.Dense(3*num_features,
+                              activation=tf.nn.relu)(net)
+        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.Dense(4*num_features,
+                              activation=tf.nn.relu)(net)
+        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.Dense(num_features)(net)
         return net
 
 
