@@ -124,11 +124,16 @@ if __name__ == "__main__":
             ground_truth_all = np.reshape(ground_truth_all, (-1, 2))
             prediction_all = np.reshape(prediction_all, (-1, 2))
 
-plt.plot(ground_truth_all[:, 0])
-plt.plot(prediction_all[:, 0])
+plt.plot(ground_truth_all[2000:5000, 0])
+plt.plot(prediction_all[2000:5000, 0])
 plt.show()
 
-
+pred_mean = np.mean(prediction_all[:, 0], axis=0)
+pred_var = np.var(prediction_all[:, 0], axis=0)
+gt_mean = np.mean(ground_truth_all[:, 0], axis=0)
+gt_var = np.var(ground_truth_all[:, 0], axis=0)
+mean_cent_prod = np.mean((prediction_all - pred_mean) * (ground_truth_all - gt_mean))
+CCC = (2 * mean_cent_prod) / (pred_var + gt_var + np.square(pred_mean - gt_mean))
 
 
 
