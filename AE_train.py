@@ -68,8 +68,9 @@ def generative_net(audio_frames=None,
                    latent_dim=50,
                    is_training=False):
     with tf.variable_scope("Decoder"):
+        net = tf.reshape(audio_frames, (-1, 256))
         net = tf.layers.Dense(2*num_features,
-                              activation=tf.nn.relu)(audio_frames)
+                              activation=tf.nn.relu)(net)
         net = tf.layers.dropout(net, rate=0.5)
         net = tf.layers.Dense(3*num_features,
                               activation=tf.nn.relu)(net)
@@ -78,6 +79,7 @@ def generative_net(audio_frames=None,
                               activation=tf.nn.relu)(net)
         net = tf.layers.dropout(net, rate=0.5)
         net = tf.layers.Dense(num_features)(net)
+        net = tf.reshape(net, (-1, 1, seq_length, num_features))
         return net
 
 
