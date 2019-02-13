@@ -7,6 +7,6 @@ cd DWML_V4
 source /data/leuven/324/vsc32400/miniconda3/bin/activate py3new
 echo
 echo "Program outputs begins:"
-python AE_train.py --seq_length 500 --batch_size 10 --epochs --learning_rate_decay false --learning_rate 0.0001 --output_dir $VSC_DATA/Learning_outputs/e2e_2018_AE --dataset_dir $VSC_DATA/datasets/tf_records
+python AE_train.py --seq_length 500 --batch_size 10 --epochs 300 --learning_rate_decay false --learning_rate 0.0001 --output_dir $VSC_DATA/Learning_outputs/e2e_2018_AE_dense_batchnorm --dataset_dir $VSC_DATA/datasets/tf_records
 echo "End - `date`"
 

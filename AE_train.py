@@ -49,15 +49,15 @@ def inference_net(audio_frames=None,
         net = tf.layers.Dense(4*num_features,
                               activation=tf.nn.relu)(audio_input)
         net = tf.layers.dropout(net, rate=0.5)
-        net = tf.layers.batch_normalization(net)
+        net = tf.layers.batch_normalization(net, training=is_training)
         net = tf.layers.Dense(3*num_features,
                               activation=tf.nn.relu)(net)
         net = tf.layers.dropout(net, rate=0.5)
-        net = tf.layers.batch_normalization(net)
+        net = tf.layers.batch_normalization(net, training=is_training)
         net = tf.layers.Dense(2*num_features,
                               activation=tf.nn.relu)(net)
         net = tf.layers.dropout(net, rate=0.5)
-        net = tf.layers.batch_normalization(net)
+        net = tf.layers.batch_normalization(net, training=is_training)
         net = tf.layers.Dense(256,
                               activation=tf.nn.relu)(net)
 
@@ -74,15 +74,15 @@ def generative_net(audio_frames=None,
         net = tf.layers.Dense(2*num_features,
                               activation=tf.nn.relu)(net)
         net = tf.layers.dropout(net, rate=0.5)
-        net = tf.layers.batch_normalization(net)
+        net = tf.layers.batch_normalization(net, training=is_training)
         net = tf.layers.Dense(3*num_features,
                               activation=tf.nn.relu)(net)
         net = tf.layers.dropout(net, rate=0.5)
-        net = tf.layers.batch_normalization(net)
+        net = tf.layers.batch_normalization(net, training=is_training)
         net = tf.layers.Dense(4*num_features,
                               activation=tf.nn.relu)(net)
         net = tf.layers.dropout(net, rate=0.5)
-        net = tf.layers.batch_normalization(net)
+        net = tf.layers.batch_normalization(net, training=is_training)
         net = tf.layers.Dense(num_features)(net)
         net = tf.reshape(net, (-1, 1, seq_length, num_features))
         return net
@@ -229,7 +229,7 @@ def train(dataset_dir=None,
             merged = tf.summary.merge_all()
             train_writer = tf.summary.FileWriter(output_dir + '/log/train/', sess.graph)
             val_writer = tf.summary.FileWriter(output_dir + '/log/validation/')
-            modal_saver = tf.train.Saver(max_to_keep=50)
+            modal_saver = tf.train.Saver(max_to_keep=20)
 
             # Initialize the variables
             sess.run(tf.global_variables_initializer())
