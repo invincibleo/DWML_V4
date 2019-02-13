@@ -150,39 +150,45 @@ def train(dataset_dir=None,
                          max_outputs=5)
 
         # Generating power spectrogram
-        stfts = tf.contrib.signal.stft(tf.reshape(audio_input, (batch_size, -1)),
-                                       frame_length=1024,
-                                       frame_step=512,
-                                       fft_length=1024)
-        stfts_reconstruction = tf.contrib.signal.stft(tf.reshape(x_logit, (batch_size, -1)),
-                                       frame_length=1024,
-                                       frame_step=512,
-                                       fft_length=1024)
-        power_spectrograms = tf.real(stfts * tf.conj(stfts))
-        power_spectrograms_re = tf.real(stfts_reconstruction * tf.conj(stfts_reconstruction))
-        power_spectrograms = tf.expand_dims(power_spectrograms, axis=3)
-        power_spectrograms = tf.transpose(power_spectrograms, (0, 2, 1, 3))
-        power_spectrograms_re = tf.expand_dims(power_spectrograms_re, axis=3)
-        power_spectrograms_re = tf.transpose(power_spectrograms_re, (0, 2, 1, 3))
-        power_spectrograms = tf.concat([power_spectrograms, power_spectrograms_re], axis=2)
+        # stfts = tf.contrib.signal.stft(tf.reshape(audio_input, (batch_size, -1)),
+        #                                frame_length=1024,
+        #                                frame_step=512,
+        #                                fft_length=1024)
+        # stfts_reconstruction = tf.contrib.signal.stft(tf.reshape(x_logit, (batch_size, -1)),
+        #                                frame_length=1024,
+        #                                frame_step=512,
+        #                                fft_length=1024)
+        #
+        # power_spectrograms = tf.real(stfts * tf.conj(stfts))
+        # power_spectrograms_re = tf.real(stfts_reconstruction * tf.conj(stfts_reconstruction))
+        #
+        # power_spectrograms = tf.expand_dims(power_spectrograms, axis=3)
+        # power_spectrograms = tf.transpose(power_spectrograms[:, :, :65, :], (0, 2, 1, 3))
+        #
+        # power_spectrograms_re = tf.expand_dims(power_spectrograms_re, axis=3)
+        # power_spectrograms_re = tf.transpose(power_spectrograms_re[:, :, :65, :], (0, 2, 1, 3))
+        #
+        # tf.summary.image("Power_Spectrogram", power_spectrograms)
+        # tf.summary.image("Power_Spectrogram_re", power_spectrograms_re)
 
-        tf.summary.image("Power_Spectrogram", power_spectrograms)
         tf.summary.histogram("reconstruction",
                              tf.reshape(x_logit, (-1, num_features)))
         tf.summary.histogram("ground_truth",
                              tf.reshape(audio_input, (-1, num_features)))
 
-        total_loss = tf.losses.mean_squared_error(predictions=x_logit, labels=audio_input)
-
+        # total_loss = tf.losses.mean_squared_error(predictions=x_logit, labels=audio_input)
+        # total_loss = tf.losses.mean_pairwise_squared_error(predictions=x_logit, labels=audio_input)
+        total_loss = losses.concordance_cc(prediction=tf.reshape(x_logit, (-1, )),
+                                           ground_truth=tf.reshape(audio_input, (-1, )))
         tf.summary.scalar('losses/total_loss', total_loss)
 
-        # Visualize all weights and bias
-        var_visual_list = []
-        for var in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
-            if "kernel" or "bias" in var.name:
-                var_visual_list.append(var)
-        for var in var_visual_list:
-            tf.summary.histogram(var.name, var)
+        # # Visualize all weights and bias (takes a lot of space)
+        # var_visual_list = []
+        # for var in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
+        #     if "kernel" or "bias" in var.name:
+        #         var_visual_list.append(var)
+        # for var in var_visual_list:
+        #     tf.summary.histogram(var.name, var)
 
         # Learning rate decay
         global_step = tf.Variable(0, trainable=False)
@@ -255,11 +261,10 @@ def train(dataset_dir=None,
                             ground_truth = np.array(ground_truth).squeeze(axis=2)
                             features_value = features_value['features']
 
-                            _, loss, summary, _, _ = sess.run((train,
+                            _, loss, summary, _, = sess.run((train,
                                                             total_loss,
                                                             merged,
-                                                            mse_update_op,
-                                                            power_spectrograms_re),
+                                                            mse_update_op),
                                                            feed_dict={audio_input: features_value,
                                                                       is_training: True})
                             train_loss += loss
@@ -285,10 +290,9 @@ def train(dataset_dir=None,
                             features_value, ground_truth = sess.run(dataset_iter)
                             ground_truth = np.array(ground_truth).squeeze(axis=2)
                             features_value = features_value['features']
-                            loss, summary, _, _ = sess.run((total_loss,
+                            loss, summary, _, = sess.run((total_loss,
                                                          merged,
-                                                         mse_update_op,
-                                                         power_spectrograms_re),
+                                                         mse_update_op),
                                                         feed_dict={audio_input: features_value,
                                                                    is_training: False})
                             val_loss += loss
