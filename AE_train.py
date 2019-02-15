@@ -161,11 +161,11 @@ def train(dataset_dir=None,
         tf.summary.audio("reconstruction_audio",
                          tf.reshape(x_logit, (batch_size, -1)),
                          sample_rate=16000,
-                         max_outputs=5)
+                         max_outputs=3)
         tf.summary.audio("pca_reconstruction_audio",
                          tf.reshape(reconstruction_pca, (batch_size, -1)),
                          sample_rate=16000,
-                         max_outputs=5)
+                         max_outputs=3)
 
         # Generating power spectrogram
         # stfts = tf.contrib.signal.stft(tf.reshape(audio_input, (batch_size, -1)),
