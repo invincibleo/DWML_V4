@@ -30,8 +30,6 @@ import os
 import shutil
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
-import matplotlib
-matplotlib.use("TkAgg") # Add only for Mac to avoid crashing
 import matplotlib.pyplot as plt
 
 tf.enable_eager_execution()
@@ -151,13 +149,14 @@ def train(dataset_dir=None,
                                  is_training=is_training)
 
         # PCA
-        audio_input_reshaped = tf.reshape(audio_input, (-1, seq_length, num_features))
-        audio_input_mean = tf.reduce_mean(audio_input_reshaped, axis=[1], keep_dims=True)
-        audio_input_reshaped = audio_input_reshaped - audio_input_mean
-        audio_input_covariance = tf.matmul(audio_input_reshaped, audio_input_reshaped, transpose_a=True) / seq_length
-        s, u, v = tf.svd(audio_input_covariance)
-        pca_low_dim = tf.matmul(tf.reshape(x_logit, (-1, seq_length, num_features)), u[:, :, :latent_dim])
-        reconstruction_pca = tf.matmul(pca_low_dim, u[:, :, :latent_dim], transpose_b=True) + audio_input_mean
+        with tf.device('/cpu:2'):
+            audio_input_reshaped = tf.reshape(audio_input, (-1, seq_length, num_features))
+            audio_input_mean = tf.reduce_mean(audio_input_reshaped, axis=[1], keep_dims=True)
+            audio_input_reshaped = audio_input_reshaped - audio_input_mean
+            audio_input_covariance = tf.matmul(audio_input_reshaped, audio_input_reshaped, transpose_a=True) / seq_length
+            s, u, v = tf.svd(audio_input_covariance)
+            pca_low_dim = tf.matmul(tf.reshape(x_logit, (-1, seq_length, num_features)), u[:, :, :latent_dim])
+            reconstruction_pca = tf.matmul(pca_low_dim, u[:, :, :latent_dim], transpose_b=True) + audio_input_mean
 
         tf.summary.audio("reconstruction_audio",
                          tf.reshape(x_logit, (batch_size, -1)),
