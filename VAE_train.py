@@ -289,13 +289,13 @@ def train(dataset_dir=None,
             x_logit = tf.sigmoid(x_logit)
 
         # PCA
-        x_logit_reshaped = tf.reshape(x_logit, (-1, seq_length, num_features))
-        x_logit_mean = tf.reduce_mean(x_logit_reshaped, axis=[1], keep_dims=True)
-        x_logit_reshaped = x_logit_reshaped - x_logit_mean
-        x_logit_covariance = tf.matmul(x_logit_reshaped, x_logit_reshaped, transpose_a=True) / seq_length
-        s, u, v = tf.svd(x_logit_covariance)
+        audio_input_reshaped = tf.reshape(audio_input, (-1, seq_length, num_features))
+        audio_input_mean = tf.reduce_mean(audio_input_reshaped, axis=[1], keep_dims=True)
+        audio_input_reshaped = audio_input_reshaped - audio_input_mean
+        audio_input_covariance = tf.matmul(audio_input_reshaped, audio_input_reshaped, transpose_a=True) / seq_length
+        s, u, v = tf.svd(audio_input_covariance)
         pca_low_dim = tf.matmul(tf.reshape(x_logit, (-1, seq_length, num_features)), u[:, :, :latent_dim])
-        reconstruction_pca = tf.matmul(pca_low_dim, u[:, :, :latent_dim], transpose_b=True) + x_logit_mean
+        reconstruction_pca = tf.matmul(pca_low_dim, u[:, :, :latent_dim], transpose_b=True) + audio_input_mean
 
         tf.summary.audio("reconstruction_audio",
                          tf.reshape(x_logit, (batch_size, -1)),
