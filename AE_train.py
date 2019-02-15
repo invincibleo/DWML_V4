@@ -149,7 +149,7 @@ def train(dataset_dir=None,
                                  is_training=is_training)
 
         # PCA
-        with tf.device('/cpu:2'):
+        with tf.device('/cpu:0'):
             audio_input_reshaped = tf.reshape(audio_input, (-1, seq_length, num_features))
             audio_input_mean = tf.reduce_mean(audio_input_reshaped, axis=[1], keep_dims=True)
             audio_input_reshaped = audio_input_reshaped - audio_input_mean
@@ -237,7 +237,7 @@ def train(dataset_dir=None,
         metrics_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="my_metrics")
         metrics_vars_initializer = tf.variables_initializer(var_list=metrics_vars)
 
-        with tf.Session(graph=g) as sess:
+        with tf.Session(graph=g, config=tf.ConfigProto(log_device_placement=True)) as sess:
             # Define the writers
             merged = tf.summary.merge_all()
             train_writer = tf.summary.FileWriter(output_dir + '/log/train/', sess.graph)
