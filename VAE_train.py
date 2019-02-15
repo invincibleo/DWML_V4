@@ -287,8 +287,21 @@ def train(dataset_dir=None,
         if apply_sigmoid:
             x_logit = tf.sigmoid(x_logit)
 
+        # PCA
+        x_logit_reshaped = tf.reshape(x_logit, (-1, seq_length, num_features))
+        x_logit_mean = tf.reduce_mean(x_logit_reshaped, axis=[1], keep_dims=True)
+        x_logit_reshaped = x_logit_reshaped - x_logit_mean
+        x_logit_covariance = tf.matmul(x_logit_reshaped, x_logit_reshaped, transpose_a=True) / seq_length
+        s, u, v = tf.svd(x_logit_covariance)
+        pca_low_dim = tf.matmul(tf.reshape(x_logit, (-1, seq_length, num_features)), u[:, :, :latent_dim])
+        reconstruction_pca = tf.matmul(pca_low_dim, u[:, :, :latent_dim], transpose_b=True) + x_logit_mean
+
         tf.summary.audio("reconstruction_audio",
                          tf.reshape(x_logit, (batch_size, -1)),
+                         sample_rate=16000,
+                         max_outputs=5)
+        tf.summary.audio("pca_reconstruction_audio",
+                         tf.reshape(reconstruction_pca, (batch_size, -1)),
                          sample_rate=16000,
                          max_outputs=5)
         tf.summary.histogram("reconstruction",
@@ -399,10 +412,11 @@ def train(dataset_dir=None,
                             ground_truth = np.array(ground_truth).squeeze(axis=2)
                             features_value = features_value['features']
 
-                            _, loss, summary, _ = sess.run((train,
+                            _, loss, summary, _, _, = sess.run((train,
                                                             total_loss,
                                                             merged,
-                                                            mse_update_op),
+                                                            mse_update_op,
+                                                            reconstruction_pca),
                                                            feed_dict={audio_input: features_value,
                                                                       is_training: True})
                             train_loss += loss
@@ -428,9 +442,10 @@ def train(dataset_dir=None,
                             features_value, ground_truth = sess.run(dataset_iter)
                             ground_truth = np.array(ground_truth).squeeze(axis=2)
                             features_value = features_value['features']
-                            loss, summary, _ = sess.run((total_loss,
+                            loss, summary, _, _, = sess.run((total_loss,
                                                          merged,
-                                                         mse_update_op),
+                                                         mse_update_op,
+                                                         reconstruction_pca),
                                                         feed_dict={audio_input: features_value,
                                                                    is_training: False})
                             val_loss += loss
@@ -537,6 +552,7 @@ if __name__ == "__main__":
                                      seq_length=FLAGS.seq_length,
                                      batch_size=FLAGS.batch_size,
                                      num_features=640,
+                                     latent_dim=FLAGS.latent_dim,
                                      epochs=FLAGS.epochs,
                                      model_name=FLAGS.model,
                                      output_dir=output_dir)
