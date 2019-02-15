@@ -27,6 +27,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 import os
+import shutil
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 import matplotlib
@@ -337,7 +338,7 @@ def train(dataset_dir=None,
 
             # Save the model, can reload different checkpoint later in testing
             if os.path.exists(output_dir + '/model_files'):
-                os.removedirs(output_dir + '/model_files')
+                shutil.rmtree(output_dir + '/model_files')
 
             tf.saved_model.simple_save(sess,
                                        export_dir=output_dir + '/model_files',
