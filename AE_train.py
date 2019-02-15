@@ -58,7 +58,7 @@ def inference_net(audio_frames=None,
                               activation=tf.nn.relu)(net)
         net = tf.layers.dropout(net, rate=0.5)
         net = tf.layers.batch_normalization(net, training=is_training)
-        net = tf.layers.Dense(256,
+        net = tf.layers.Dense(latent_dim,
                               activation=tf.nn.relu)(net)
 
         return net
@@ -70,7 +70,7 @@ def generative_net(audio_frames=None,
                    latent_dim=50,
                    is_training=False):
     with tf.variable_scope("Decoder"):
-        net = tf.reshape(audio_frames, (-1, 256))
+        net = tf.reshape(audio_frames, (-1, latent_dim))
         net = tf.layers.Dense(2*num_features,
                               activation=tf.nn.relu)(net)
         net = tf.layers.dropout(net, rate=0.5)
