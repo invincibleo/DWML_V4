@@ -240,6 +240,17 @@ def train(dataset_dir=None,
             # modal_saver_loader = tf.train.Saver(var_list=loading_var_list[0:5])
             # modal_saver_loader.restore(sess, output_dir + "/model.ckpt-" + str(199))
 
+            # Save the model, can reload different checkpoint later in testing
+            if os.path.exists(output_dir + '/model_files'):
+                os.removedirs(output_dir + '/model_files')
+
+            tf.saved_model.simple_save(sess,
+                                       export_dir=output_dir + '/model_files',
+                                       inputs={"audio_input": audio_input,
+                                               "is_training": is_training},
+                                       outputs={"z": z,
+                                                "x_logit": x_logit})
+
             # Epochs
             val_old_metric, val_new_metric = [np.inf], [0]
             for epoch_no in range(epochs):
