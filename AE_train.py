@@ -229,9 +229,14 @@ def train(dataset_dir=None,
 
 
         # MSE
+        mse_update_op = []
         with tf.name_scope('my_metrics'):
-            mse, mse_update_op = tf.metrics.mean_squared_error(audio_input, x_logit)
+            mse, mse_update_op_nn = tf.metrics.mean_squared_error(audio_input, x_logit)
+            mse_pca, mse_update_op_pca = tf.metrics.mean_squared_error(audio_input, reconstruction_pca)
+            mse_update_op.append(mse_update_op_nn)
+            mse_update_op.append(mse_update_op_pca)
         tf.summary.scalar('metric/mse_{}'.format('reconstruction'), mse)
+        tf.summary.scalar('metric/mse_{}'.format('reconstruction'), mse_pca)
 
         # Metrics initializer
         metrics_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="my_metrics")
