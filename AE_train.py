@@ -232,17 +232,18 @@ def train(dataset_dir=None,
         mse_update_op = []
         with tf.name_scope('my_metrics'):
             mse, mse_update_op_nn = tf.metrics.mean_squared_error(audio_input, x_logit)
-            mse_pca, mse_update_op_pca = tf.metrics.mean_squared_error(audio_input, reconstruction_pca)
+            mse_pca, mse_update_op_pca = tf.metrics.mean_squared_error(audio_input,
+                                                                       tf.reshape(reconstruction_pca, (-1, 1, seq_length, num_features)))
             mse_update_op.append(mse_update_op_nn)
             mse_update_op.append(mse_update_op_pca)
         tf.summary.scalar('metric/mse_{}'.format('reconstruction'), mse)
-        tf.summary.scalar('metric/mse_{}'.format('reconstruction'), mse_pca)
+        tf.summary.scalar('metric/mse_{}'.format('reconstruction_pca'), mse_pca)
 
         # Metrics initializer
         metrics_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="my_metrics")
         metrics_vars_initializer = tf.variables_initializer(var_list=metrics_vars)
 
-        with tf.Session(graph=g, config=tf.ConfigProto(log_device_placement=True)) as sess:
+        with tf.Session(graph=g) as sess:
             # Define the writers
             merged = tf.summary.merge_all()
             train_writer = tf.summary.FileWriter(output_dir + '/log/train/', sess.graph)
