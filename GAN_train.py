@@ -151,6 +151,7 @@ def train(dataset_dir=None,
 
         tf.summary.scalar('losses/disc_loss', disc_loss)
         tf.summary.scalar('losses/gen_loss', gen_loss)
+        tf.summary.scalar('losses/total_loss', disc_loss + gen_loss)
         tf.summary.histogram('losses/disc_loss', disc_loss)
         tf.summary.histogram('losses/gen_loss', gen_loss)
 
@@ -273,18 +274,17 @@ def train(dataset_dir=None,
                             ground_truth = np.array(ground_truth).squeeze(axis=2)
                             features_value = features_value['features']
                             noise_input_batch = np.random.uniform(-1, 1, features_value.shape)
-                            summary, dloss, _ = sess.run((merged,
-                                                    disc_loss,
+                            dloss, _ = sess.run((disc_loss,
                                                     acc_update_op),
                                                 feed_dict={audio_input: features_value,
                                                            noise_input: noise_input_batch,
                                                            is_training: False})
-                            _, gloss, _ = sess.run((gen_step,
+                            summary, gloss, _ = sess.run((merged,
                                                  gen_loss,
                                                  acc_update_op),
                                                 feed_dict={audio_input: features_value,
                                                            noise_input: noise_input_batch,
-                                                           is_training: True})
+                                                           is_training: False})
 
                             val_loss += dloss + gloss
                             dev_loss_list[epoch_no, count_num_dev] = dloss + gloss
