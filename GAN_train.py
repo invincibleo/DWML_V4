@@ -48,8 +48,7 @@ def generator(audio_frames=None,
         net = tf.layers.Dense(latent_dim,
                               activation=tf.nn.relu)(net)
         net = tf.layers.dropout(net, rate=0.5)
-        net = tf.layers.Dense(num_features,
-                              activation=tf.nn.relu)(net)
+        net = tf.layers.Dense(num_features)(net)
         net = tf.reshape(net, (-1, 1, seq_length, num_features))
         return net
 
