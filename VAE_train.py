@@ -481,6 +481,12 @@ def train(dataset_dir=None,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        '--dataset_dir',
+        type=str,
+        default='./tf_records',
+        help='Path to the tensorflow records dataset'
+    )
+    parser.add_argument(
         '--output_dir',
         type=str,
         default='./2017_e2e_output_dir',
@@ -531,7 +537,7 @@ if __name__ == "__main__":
     FLAGS, unparsed = parser.parse_known_args()
 
     output_dir = FLAGS.output_dir
-    loss_list, dev_loss_list = train(Path("./tf_records"),
+    loss_list, dev_loss_list = train(Path(FLAGS.dataset_dir),
                                      init_learning_rate=FLAGS.learning_rate,
                                      learning_rate_decay=FLAGS.learning_rate_decay,
                                      seq_length=FLAGS.seq_length,
