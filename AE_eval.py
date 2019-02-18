@@ -157,6 +157,16 @@ if __name__ == "__main__":
             prediction_all = prediction_all[0:total_num, :]
             z_all = z_all[0:total_num, :]
 
+            rand_idx = np.random.randint(z_all.shape[0], size=5000)
+            # Visualization of the embeddings
+            summary_writer = tf.summary.FileWriter(output_dir + '/embeddings')
+            embedding_var = tf.Variable(z_all[rand_idx, :], name='latent_z')
+            sess.run(embedding_var.initializer)
+            config = projector.ProjectorConfig()
+            embedding = config.embeddings.add()
+            embedding.tensor_name = embedding_var.name
+            embedding.metadata_path = "metadata.tsv"
+            projector.visualize_embeddings(summary_writer, config)
             # Write labels
             embeddings_metadata_addr = output_dir + '/embeddings/metadata.tsv'
             if not os.path.exists(output_dir + '/embeddings'):
@@ -164,19 +174,9 @@ if __name__ == "__main__":
             with open(embeddings_metadata_addr, 'w') as f:
                 f.write("Index\tArousal\tValence\n")
                 idx = 0
-                for gt in ground_truth_all:
+                for gt in ground_truth_all[rand_idx, :]:
                     idx += 1
                     f.write("{}\t{}\t{}\n".format(idx, int(gt[0]*10), int(gt[1]*10)))
-
-            # Visualization of the embeddings
-            summary_writer = tf.summary.FileWriter(output_dir + '/embeddings')
-            embedding_var = tf.Variable(z_all, name='latent_z')
-            sess.run(embedding_var.initializer)
-            config = projector.ProjectorConfig()
-            embedding = config.embeddings.add()
-            embedding.tensor_name = embedding_var.name
-            embedding.metadata_path = "metadata.tsv"
-            projector.visualize_embeddings(summary_writer, config)
 
             saver = tf.train.Saver()  # Save the model files into the same folder of embeddings
             saver.save(sess, os.path.join(output_dir + '/embeddings', "embeding_model.ckpt"), 1)
