@@ -199,10 +199,16 @@ def train(dataset_dir=None,
                             count_num_train += 1
                 except tf.errors.OutOfRangeError:
                     train_loss /= count_num_train
-                    train_ccc_arousal = sess.run(concordance_cc2_list[0])
-                    train_ccc_valence = sess.run(concordance_cc2_list[1])
-                    train_mse_arousal = sess.run(mse_list[0])
-                    train_mse_valence = sess.run(mse_list[1])
+                    train_ccc_arousal, train_ccc_valence, \
+                        train_mse_arousal, train_mse_valence, \
+                        summary = sess.run([concordance_cc2_list[0],
+                                            concordance_cc2_list[1],
+                                            mse_list[0],
+                                            mse_list[1],
+                                            merged],
+                                           feed_dict={audio_input: features_value,
+                                                      ground_truth_input: ground_truth,
+                                                      is_training: False})
                     sess.run(metrics_vars_initializer)
                     print('Training loss: {}\n'
                           'Training arousal CCC: {}\n'
@@ -238,10 +244,16 @@ def train(dataset_dir=None,
                             count_num_dev += 1
                 except tf.errors.OutOfRangeError:
                     val_loss /= count_num_dev
-                    val_ccc_arousal = sess.run(concordance_cc2_list[0])
-                    val_ccc_valence = sess.run(concordance_cc2_list[1])
-                    val_mse_arousal = sess.run(mse_list[0])
-                    val_mse_valence = sess.run(mse_list[1])
+                    val_ccc_arousal, val_ccc_valence, \
+                        val_mse_arousal, val_mse_valence, \
+                        summary = sess.run([concordance_cc2_list[0],
+                                            concordance_cc2_list[1],
+                                            mse_list[0],
+                                            mse_list[1],
+                                            merged],
+                                           feed_dict={audio_input: features_value,
+                                                      ground_truth_input: ground_truth,
+                                                      is_training: False})
                     sess.run(metrics_vars_initializer)
                     print('\nEpoch: {}'.format(epoch_no))
                     print('Training loss: {}\n'

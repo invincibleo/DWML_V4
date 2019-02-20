@@ -256,7 +256,10 @@ def train(dataset_dir=None,
                             count_num_train += 1
                 except tf.errors.OutOfRangeError:
                     train_loss /= count_num_train
-                    train_acc = sess.run(acc)
+                    train_acc, summary = sess.run([acc,
+                                                   merged],
+                                                  feed_dict={audio_input: features_value,
+                                                             is_training: False})
                     sess.run(metrics_vars_initializer)
                     print('Training loss: {}\n'
                           'Training ACC: {}'.format(train_loss,
@@ -291,7 +294,10 @@ def train(dataset_dir=None,
                             count_num_dev += 1
                 except tf.errors.OutOfRangeError:
                     val_loss /= count_num_dev
-                    val_acc = sess.run(acc)
+                    val_acc, summary = sess.run([acc,
+                                                 merged],
+                                                feed_dict={audio_input: features_value,
+                                                           is_training: False})
                     sess.run(metrics_vars_initializer)
                     print('\nEpoch: {}'.format(epoch_no))
                     print('Training loss: {}\n'

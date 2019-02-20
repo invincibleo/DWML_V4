@@ -311,7 +311,10 @@ def train(dataset_dir=None,
                             count_num_train += 1
                 except tf.errors.OutOfRangeError:
                     train_loss /= count_num_train
-                    train_mse = sess.run(mse)
+                    train_mse, summary = sess.run([mse,
+                                                   merged],
+                                                  feed_dict={audio_input: features_value,
+                                                             is_training: False})
                     sess.run(metrics_vars_initializer)
                     print('Training loss: {}\n'
                           'Training MSE: {}'.format(train_loss,
@@ -339,7 +342,10 @@ def train(dataset_dir=None,
                             count_num_dev += 1
                 except tf.errors.OutOfRangeError:
                     val_loss /= count_num_dev
-                    val_mse = sess.run(mse)
+                    val_mse, summary = sess.run([mse,
+                                                 merged],
+                                                feed_dict={audio_input: features_value,
+                                                           is_training: False})
                     sess.run(metrics_vars_initializer)
                     print('\nEpoch: {}'.format(epoch_no))
                     print('Training loss: {}\n'
