@@ -87,9 +87,126 @@ def generative_net(audio_frames=None,
         return net
 
 
+def get_data_iter(output_types, output_shapes):
+    # Make the iterator
+    iterator = tf.data.Iterator.from_structure(output_types,
+                                               output_shapes)
+    dataset_iter = iterator.get_next()
+    return iterator, dataset_iter
+
+
+def visualizing_weights_bias():
+    # Visualize all weights and bias
+    var_visual_list = []
+    for var in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
+        if "kernel" or "bias" in var.name:
+            var_visual_list.append(var)
+    for var in var_visual_list:
+        tf.summary.histogram(var.name, var)
+
+
+def get_learning_rate_decay(is_decay=False,
+                            global_step=None,
+                            init_learning_rate=0.001,
+                            epochs=None,
+                            decay_type="cosine_restarts"):
+    def get_decay_func(init_learning_rate=0.001,
+                       global_step=None,
+                       epochs=None,
+                       decay_type="cosine_decay_restarts"):
+        options = {"polynomial_decay":
+                       tf.train.polynomial_decay(learning_rate=init_learning_rate,
+                                                 global_step=global_step,
+                                                 decay_steps=epochs//10,
+                                                 end_learning_rate=init_learning_rate/100,
+                                                 power=1.0,
+                                                 cycle=False,
+                                                 name="polynomial_decay_no_cycle"),
+                   "inverse_time_decay":
+                       tf.train.inverse_time_decay(learning_rate=init_learning_rate,
+                                                   global_step=global_step,
+                                                   decay_steps=epochs // 10,
+                                                   decay_rate=0.95,
+                                                   staircase=True,
+                                                   name="inverse_time_decay_staircase"),
+                   "cosine_decay_restarts":
+                       tf.train.cosine_decay_restarts(learning_rate=init_learning_rate,
+                                                      global_step=global_step,
+                                                      first_decay_steps=epochs//4,
+                                                      t_mul=2.0,
+                                                      m_mul=0.5,
+                                                      alpha=0.0,
+                                                      name='cosine_decay_restarts'),
+                   "noisy_linear_cosine_decay":
+                       tf.train.noisy_linear_cosine_decay(learning_rate=init_learning_rate,
+                                                          global_step=global_step,
+                                                          decay_steps=epochs//10,
+                                                          initial_variance=1.0,
+                                                          variance_decay=0.55,
+                                                          num_periods=0.5,
+                                                          alpha=0.0,
+                                                          beta=0.001,
+                                                          name='noisy_linear_cosine_decay')}
+        return options[decay_type]
+
+    # Learning rate decay
+    if is_decay is True:
+        learning_rate = get_decay_func(init_learning_rate=init_learning_rate,
+                                       global_step=global_step,
+                                       epochs=epochs,
+                                       decay_type=decay_type)
+    else:
+        learning_rate = init_learning_rate
+
+    add_global = global_step.assign_add(1)
+    return learning_rate, add_global
+
+
+def get_optimizer_train_op(total_loss, learning_rate):
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    train_op = optimizer.minimize(total_loss)
+
+    return train_op
+
+
+def get_metrics_op(pair_list=[], names=[]):
+    # MSE
+    with tf.name_scope('my_metrics'):
+        metrics_list = []
+        metrics_update_op_list = []
+        for idx, item in enumerate(pair_list):
+            mse, mse_update_op = tf.metrics.mean_squared_error(item[0], item[1])
+            metrics_list.append(mse)
+            metrics_update_op_list.append(mse_update_op)
+            tf.summary.scalar('metric/mse_{}_{}'.format('reconstruction', names[idx]), mse)
+    return metrics_list, metrics_update_op_list
+
+
+def get_metrics_init_op():
+    # Metrics initializer
+    metrics_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="my_metrics")
+    metrics_vars_initializer = tf.variables_initializer(var_list=metrics_vars)
+    return metrics_vars_initializer
+
+
+def save_model(sess,
+               output_dir,
+               inputs={},
+               outputs={}):
+    # Save the model, can reload different checkpoint later in testing
+    if os.path.exists(output_dir + '/model_files'):
+        shutil.rmtree(output_dir + '/model_files')
+
+    tf.saved_model.simple_save(sess,
+                               export_dir=output_dir + '/model_files',
+                               inputs=inputs,
+                               outputs=outputs)
+
+
 def train(dataset_dir=None,
           init_learning_rate=0.001,
           learning_rate_decay=True,
+          decay_type='cosine_decay_restarts',
           batch_size=32,
           seq_length=2,
           num_features=640,
@@ -119,18 +236,12 @@ def train(dataset_dir=None,
                                            seq_length=seq_length,
                                            debugging=False)
 
-        # Make the iterator
-        iterator = tf.data.Iterator.from_structure(train_ds.output_types,
-                                                   train_ds.output_shapes)
-
-        # Placeholder for variable is_training
-        is_training = tf.placeholder(tf.bool, shape=())
-
         # Get tensor signature from the dataset
-        # features, ground_truth = iterator.get_next()
-        # ground_truth = tf.squeeze(ground_truth, 2)
-        dataset_iter = iterator.get_next()
+        iterator, dataset_iter = get_data_iter(train_ds.output_types, train_ds.output_shapes)
 
+
+        # Placeholders
+        is_training = tf.placeholder(tf.bool, shape=())
         audio_input = tf.placeholder(dtype=tf.float32,
                                      shape=[None, 1, seq_length, num_features],  # Can feed any shape
                                      name='audio_input_placeholder')
@@ -208,36 +319,25 @@ def train(dataset_dir=None,
         # for var in var_visual_list:
         #     tf.summary.histogram(var.name, var)
 
-        # Learning rate decay
+        # Get learning_rate
         global_step = tf.Variable(0, trainable=False)
-        if learning_rate_decay is True:
-            learning_rate = tf.train.cosine_decay_restarts(learning_rate=init_learning_rate,
-                                                           global_step=global_step,
-                                                           first_decay_steps=50,
-                                                           t_mul=2.0,
-                                                           m_mul=0.5,
-                                                           alpha=0.0,  # Minimum learning rate value as a fraction of the learning_rate.
-                                                           name='cosine_decay_restarts')
-            add_global = global_step.assign_add(1)
-            tf.summary.scalar('learning_rate', learning_rate)
-        else:
-            learning_rate = init_learning_rate
+        learning_rate, add_global = get_learning_rate_decay(is_decay=learning_rate_decay,
+                                                            global_step=global_step,
+                                                            epochs=epochs,
+                                                            init_learning_rate=init_learning_rate,
+                                                            decay_type=decay_type)
+        tf.summary.scalar('learning_rate', learning_rate)
 
         # Define the optimizer
-        optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-        train = optimizer.minimize(total_loss)
+        train = get_optimizer_train_op(total_loss=total_loss, learning_rate=learning_rate)
 
 
         # MSE
-        mse_update_op = []
-        with tf.name_scope('my_metrics'):
-            mse, mse_update_op_nn = tf.metrics.mean_squared_error(audio_input, x_logit)
-            mse_pca, mse_update_op_pca = tf.metrics.mean_squared_error(audio_input,
-                                                                       tf.reshape(reconstruction_pca, (-1, 1, seq_length, num_features)))
-            mse_update_op.append(mse_update_op_nn)
-            mse_update_op.append(mse_update_op_pca)
-        tf.summary.scalar('metric/mse_{}'.format('reconstruction'), mse)
-        tf.summary.scalar('metric/mse_{}'.format('reconstruction_pca'), mse_pca)
+        metrics_list, metrics_update_op_list = get_metrics_op(pair_list=[(audio_input, x_logit),
+                                                                         (audio_input, tf.reshape(reconstruction_pca,
+                                                                                                  (-1, 1, seq_length,
+                                                                                                   num_features)))],
+                                                              names=['AE', 'PCA'])
 
         # Metrics initializer
         metrics_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="my_metrics")
@@ -248,7 +348,7 @@ def train(dataset_dir=None,
             merged = tf.summary.merge_all()
             train_writer = tf.summary.FileWriter(output_dir + '/log/train/', sess.graph)
             val_writer = tf.summary.FileWriter(output_dir + '/log/validation/')
-            modal_saver = tf.train.Saver(max_to_keep=20)
+            modal_saver = tf.train.Saver(max_to_keep=5)
 
             # Initialize the variables
             sess.run(tf.global_variables_initializer())
@@ -260,16 +360,12 @@ def train(dataset_dir=None,
             # modal_saver_loader.restore(sess, output_dir + "/model.ckpt-" + str(199))
 
             # Save the model, can reload different checkpoint later in testing
-            if os.path.exists(output_dir + '/model_files'):
-                shutil.rmtree(output_dir + '/model_files')
-
-            tf.saved_model.simple_save(sess,
-                                       export_dir=output_dir + '/model_files',
-                                       inputs={"audio_input": audio_input,
-                                               "is_training": is_training},
-                                       outputs={"z": z,
-                                                "x_logit": x_logit})
-
+            save_model(sess,
+                       output_dir,
+                       inputs={"audio_input": audio_input,
+                               "is_training": is_training},
+                       outputs={"z": z,
+                                "x_logit": x_logit})
 
             # Epochs
             val_old_metric, val_new_metric = [np.inf], [0]
@@ -300,25 +396,21 @@ def train(dataset_dir=None,
                             _, loss, summary, _, _, = sess.run((train,
                                                             total_loss,
                                                             merged,
-                                                            mse_update_op,
+                                                            metrics_update_op_list,
                                                             reconstruction_pca),
                                                            feed_dict={audio_input: features_value,
                                                                       is_training: True})
                             train_loss += loss
-                            print("CNM{}".format(loss))
                             loss_list[epoch_no, count_num_train] = loss
                             pbar.update(batch_size)
                             count_num_train += 1
                 except tf.errors.OutOfRangeError:
                     train_loss /= count_num_train
-                    train_mse, summary = sess.run([mse,
+                    train_mse, summary = sess.run([metrics_list,
                                                    merged],
                                                   feed_dict={audio_input: features_value,
                                                              is_training: False})
                     sess.run(metrics_vars_initializer)
-                    print('Training loss: {}\n'
-                          'Training MSE: {}'.format(train_loss,
-                                                    train_mse))
                     train_writer.add_summary(summary, epoch_no)
 
                 # Validation phase
@@ -331,9 +423,9 @@ def train(dataset_dir=None,
                             ground_truth = np.array(ground_truth).squeeze(axis=2)
                             features_value = features_value['features']
                             loss, summary, _, _, = sess.run((total_loss,
-                                                         merged,
-                                                         mse_update_op,
-                                                        reconstruction_pca),
+                                                            merged,
+                                                            metrics_update_op_list,
+                                                            reconstruction_pca),
                                                         feed_dict={audio_input: features_value,
                                                                    is_training: False})
                             val_loss += loss
@@ -342,7 +434,7 @@ def train(dataset_dir=None,
                             count_num_dev += 1
                 except tf.errors.OutOfRangeError:
                     val_loss /= count_num_dev
-                    val_mse, summary = sess.run([mse,
+                    val_mse, summary = sess.run([metrics_list,
                                                  merged],
                                                 feed_dict={audio_input: features_value,
                                                            is_training: False})
@@ -355,7 +447,7 @@ def train(dataset_dir=None,
                           'Validation valence MSE: {}\n'.format(val_loss,
                                                                 val_mse))
                     val_writer.add_summary(summary, epoch_no)
-                    val_new_metric = [val_mse]
+                    val_new_metric = [val_mse[0]]
 
                 # Have some penalty for the large shoot at beginning
                 if val_new_metric <= [x for x in val_old_metric]:
@@ -368,15 +460,12 @@ def train(dataset_dir=None,
                     val_old_metric = val_new_metric
 
             # Save the model, can reload different checkpoint later in testing
-            if os.path.exists(output_dir + '/model_files'):
-                shutil.rmtree(output_dir + '/model_files')
-
-            tf.saved_model.simple_save(sess,
-                                       export_dir=output_dir + '/model_files',
-                                       inputs={"audio_input": audio_input,
-                                               "is_training": is_training},
-                                       outputs={"z": z,
-                                                "x_logit": x_logit})
+            save_model(sess,
+                       output_dir,
+                       inputs={"audio_input": audio_input,
+                               "is_training": is_training},
+                       outputs={"z": z,
+                                "x_logit": x_logit})
 
     return loss_list, dev_loss_list
 
@@ -437,12 +526,19 @@ if __name__ == "__main__":
         default=True,
         help="Initial learning rate"
     )
+    parser.add_argument(
+        '--decay_type',
+        type=str,
+        default='cosine_decay_restarts',
+        help="The learning decay type"
+    )
     FLAGS, unparsed = parser.parse_known_args()
 
     output_dir = FLAGS.output_dir
     loss_list, dev_loss_list = train(Path(FLAGS.dataset_dir),
                                      init_learning_rate=FLAGS.learning_rate,
                                      learning_rate_decay=FLAGS.learning_rate_decay,
+                                     decay_type=FLAGS.decay_type,
                                      seq_length=FLAGS.seq_length,
                                      batch_size=FLAGS.batch_size,
                                      num_features=640,
