@@ -152,8 +152,7 @@ def train(dataset_dir=None,
             merged = tf.summary.merge_all()
             train_writer = tf.summary.FileWriter(output_dir + '/log/train/', sess.graph)
             val_writer = tf.summary.FileWriter(output_dir + '/log/validation/')
-            modal_saver = tf.train.Saver(max_to_keep=10,
-                                         keep_checkpoint_every_n_hours=1)
+            modal_saver = tf.train.Saver(max_to_keep=10)
 
             # Initialize the variables
             sess.run(tf.global_variables_initializer())
@@ -278,7 +277,7 @@ def train(dataset_dir=None,
                     val_new_metric = [val_ccc_arousal, val_ccc_valence]
 
                 # Have some penalty for the large shoot at beginning
-                if val_new_metric >= [x*0.9 for x in val_old_metric]:
+                if val_new_metric >= [x for x in val_old_metric]:
                     # Save the model
                     save_path = modal_saver.save(sess,
                                                  save_path=output_dir + "/model.ckpt",
@@ -303,6 +302,12 @@ def train(dataset_dir=None,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--dataset_dir',
+        type=str,
+        default='./tf_records',
+        help='Path to the tensorflow records dataset'
+    )
     parser.add_argument(
         '--output_dir',
         type=str,
@@ -348,7 +353,7 @@ if __name__ == "__main__":
     FLAGS, unparsed = parser.parse_known_args()
 
     output_dir = FLAGS.output_dir
-    loss_list, dev_loss_list = train(Path("./tf_records"),
+    loss_list, dev_loss_list = train(Path(FLAGS.dataset_dir),
                                      init_learning_rate=FLAGS.learning_rate,
                                      learning_rate_decay=FLAGS.learning_rate_decay,
                                      seq_length=FLAGS.seq_length,

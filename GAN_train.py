@@ -41,13 +41,13 @@ def generator(audio_frames=None,
         audio_input = tf.reshape(audio_frames, [-1, 640])
         net = tf.layers.Dense(3*num_features,
                               activation=tf.nn.relu)(audio_input)
-        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.dropout(net, rate=0.5, training=is_training)
         net = tf.layers.Dense(3*num_features,
                               activation=tf.nn.relu)(net)
-        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.dropout(net, rate=0.5, training=is_training)
         net = tf.layers.Dense(latent_dim,
                               activation=tf.nn.relu)(net)
-        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.dropout(net, rate=0.5, training=is_training)
         net = tf.layers.Dense(num_features)(net)
         net = tf.reshape(net, (-1, 1, seq_length, num_features))
         return net
@@ -63,17 +63,17 @@ def discriminator(audio_frames=None,
         net = tf.reshape(audio_frames, (-1, num_features))
         net = tf.layers.Dense(3*num_features,
                               activation=tf.nn.relu)(net)
-        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.dropout(net, rate=0.5, training=is_training)
         # net = tf.layers.batch_normalization(net, training=is_training)
         net = tf.layers.Dense(3*num_features,
                               activation=tf.nn.relu)(net)
-        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.dropout(net, rate=0.5, training=is_training)
         # net = tf.layers.batch_normalization(net, training=is_training)
         net_l = tf.layers.Dense(latent_dim,
                               activation=tf.nn.relu)(net)
-        net = tf.layers.dropout(net_l, rate=0.5)
+        net = tf.layers.dropout(net_l, rate=0.5, training=is_training)
         net = tf.layers.Dense(num_features)(net)
-        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.dropout(net, rate=0.5, training=is_training)
         net = tf.layers.Dense(1)(net)
         net = tf.reshape(net, (-1, 1, seq_length, 1))
         return net, net_l

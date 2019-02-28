@@ -47,15 +47,15 @@ def inference_net(audio_frames=None,
         audio_input = tf.reshape(audio_frames, [-1, 640])
         net = tf.layers.Dense(4*num_features,
                               activation=tf.nn.relu)(audio_input)
-        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.dropout(net, rate=0.5, training=is_training)
         # net = tf.layers.batch_normalization(net, training=is_training)
         net = tf.layers.Dense(3*num_features,
                               activation=tf.nn.relu)(net)
-        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.dropout(net, rate=0.5, training=is_training)
         # net = tf.layers.batch_normalization(net, training=is_training)
         net = tf.layers.Dense(2*num_features,
                               activation=tf.nn.relu)(net)
-        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.dropout(net, rate=0.5, training=is_training)
         # net = tf.layers.batch_normalization(net, training=is_training)
         net = tf.layers.Dense(latent_dim,
                               activation=tf.nn.relu)(net)
@@ -72,15 +72,15 @@ def generative_net(audio_frames=None,
         net = tf.reshape(audio_frames, (-1, latent_dim))
         net = tf.layers.Dense(2*num_features,
                               activation=tf.nn.relu)(net)
-        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.dropout(net, rate=0.5, training=is_training)
         # net = tf.layers.batch_normalization(net, training=is_training)
         net = tf.layers.Dense(3*num_features,
                               activation=tf.nn.relu)(net)
-        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.dropout(net, rate=0.5, training=is_training)
         # net = tf.layers.batch_normalization(net, training=is_training)
         net = tf.layers.Dense(4*num_features,
                               activation=tf.nn.relu)(net)
-        net = tf.layers.dropout(net, rate=0.5)
+        net = tf.layers.dropout(net, rate=0.5, training=is_training)
         # net = tf.layers.batch_normalization(net, training=is_training)
         net = tf.layers.Dense(num_features)(net)
         net = tf.reshape(net, (-1, 1, seq_length, num_features))
@@ -155,7 +155,7 @@ def train(dataset_dir=None,
             audio_input_reshaped = audio_input_reshaped - audio_input_mean
             audio_input_covariance = tf.matmul(audio_input_reshaped, audio_input_reshaped, transpose_a=True) / seq_length
             s, u, v = tf.svd(audio_input_covariance)
-            pca_low_dim = tf.matmul(tf.reshape(x_logit, (-1, seq_length, num_features)), u[:, :, :latent_dim])
+            pca_low_dim = tf.matmul(audio_input_reshaped, u[:, :, :latent_dim])
             reconstruction_pca = tf.matmul(pca_low_dim, u[:, :, :latent_dim], transpose_b=True) + audio_input_mean
 
         tf.summary.audio("reconstruction_audio",
