@@ -140,10 +140,8 @@ def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32
     # dataset = dataset.map(lambda x, y: (dict(features=tf.transpose(x['features'], [1, 0, 2])), y))
     # dataset = dataset.repeat(100)
     dataset = dataset.batch(batch_size=batch_size)
-    dataset = dataset.prefetch(buffer_size=20000)
-    # if is_training:
-    #     dataset = dataset.shuffle(buffer_size=300)
     dataset = dataset.map(lambda x, y: get_label(x, y, similarity_margin=0.025))
+    dataset = dataset.prefetch(buffer_size=100000)
     return dataset
 
 
