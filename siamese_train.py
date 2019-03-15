@@ -37,87 +37,9 @@ def siamese_net(audio_frames=None,
                 is_training=False,
                 latent_dim=3):
     with tf.variable_scope("Encoder", reuse=tf.AUTO_REUSE):
-        net = tf.reshape(audio_frames, [-1, 1, 640, 1])
-
-        net = tf.layers.conv2d(net,
-                               filters=64,
-                               kernel_size=(1, 8),
-                               strides=(1, 1),
-                               padding='same',
-                               data_format='channels_last',
-                               activation=tf.nn.relu,
-                               use_bias=True,
-                               name='Conv2d_1')
-
-        net = tf.nn.max_pool(
-            net,
-            ksize=[1, 1, 10, 1],
-            strides=[1, 1, 10, 1],
-            padding='SAME',
-            name='Maxpooling_1')
-
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='Dropout_1')
-
-        # Original model had 400 output filters for the second conv layer
-        # but this trains much faster and achieves comparable accuracy.
-        net = tf.layers.conv2d(net,
-                               filters=128,
-                               kernel_size=(1, 6),
-                               strides=(1, 1),
-                               padding='same',
-                               data_format='channels_last',
-                               activation=tf.nn.relu,
-                               use_bias=True,
-                               name='Conv2d_2')
-
-        net = tf.nn.max_pool(
-            net,
-            ksize=[1, 1, 8, 1],
-            strides=[1, 1, 8, 1],
-            padding='SAME',
-            name='Maxpooling_2')
-
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='Dropout_2')
-
-        net = tf.layers.conv2d(net,
-                               filters=256,
-                               kernel_size=(1, 6),
-                               strides=(1, 1),
-                               padding='same',
-                               data_format='channels_last',
-                               activation=tf.nn.relu,
-                               use_bias=True,
-                               name='Conv2d_3')
-
-        net = tf.reshape(net, (-1, num_features // 80, 256, 1))  # -1 -> batch_size*seq_length
-
-        # Pooling over the feature maps.
-        net = tf.nn.max_pool(
-            net,
-            ksize=[1, 1, 8, 1],
-            strides=[1, 1, 8, 1],
-            padding='SAME',
-            name='Maxpooling_3')
-
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='Dropout_3')
-
-        net = tf.reshape(net, (-1, num_features // 80 * 32))  # -1 -> batch_size
-
-        net = tf.layers.Dense(128, activation=tf.nn.relu)(net)
-        net = tf.layers.dropout(net,
-                                rate=0.5,
-                                training=is_training,
-                                name='Dropout_4')
-
+        net = tf.reshape(audio_frames, [-1, num_features])
+        net = tf.layers.dropout(net, rate=0.5, training=is_training)
+        net = tf.layers.Dense(50, activation=tf.nn.relu)(net)
         net = tf.layers.Dense(latent_dim)(net)
         return net
 
