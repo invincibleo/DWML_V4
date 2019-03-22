@@ -20,17 +20,52 @@ from tqdm import tqdm
 
 import os
 import shutil
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+# os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
-import matplotlib
-matplotlib.use("TkAgg") # Add only for Mac to avoid crashing
-import matplotlib.pyplot as plt
+# import matplotlib
+# matplotlib.use("TkAgg") # Add only for Mac to avoid crashing
+# import matplotlib.pyplot as plt
 
 
 tf.enable_eager_execution()
 
 print("TensorFlow version: {}".format(tf.__version__))
 print("Eager execution: {}".format(tf.executing_eagerly()))
+
+# aaa = (np.reshape(np.linspace(0, 7500*3*5, num=7500*3*5), (7500*3, 1, 5)), np.ones((7500*3, 2)))
+# aaa = (np.reshape(np.linspace(0, 7500*3*5, num=7500*3*5), (7500*3*5)))
+# aa = tf.data.Dataset.from_tensor_slices(aaa)
+# aa = aa.batch(7500)
+# bb = aa.window(size=500, shift=1, stride=1, drop_remainder=True)
+# cc = bb.interleave(lambda xx, yy: tf.data.Dataset.zip((xx.map(lambda x: tf.transpose(x, [1, 0, 2])), yy)),
+#                              cycle_length=3,
+#                              block_length=500)
+# dd = bb.flat_map(lambda x, y: tf.data.Dataset.zip((x.batch(10), y.batch(10))))
+# iter = dd.make_one_shot_iterator()
+# f,g = iter.get_next()
+# print(iter.get_next())
+#
+# root_path = Path('./tf_records') / 'train'
+# paths = [str(x) for x in root_path.glob('*.tfrecords')]
+# paths.sort()
+#
+# filename_queue = tf.data.Dataset.list_files(paths,
+#                                             shuffle=True,
+#                                             seed=None)
+#
+# dataset = filename_queue.map(tf.data.TFRecordDataset)
+# dataset = dataset.interleave(map_func=get_window_for_each_file_fn, cycle_length=1)
+# iter = dataset.make_one_shot_iterator()
+# f, g = iter.get_next()
+#
+# ds = tf.data.Dataset.range(7500*3)
+# ds = ds.window(size=500, shift=1,
+#                stride=1,
+#                drop_remainder=True).flat_map(lambda x: x.batch(500))
+#
+# it = ds.make_one_shot_iterator()
+# data = it.get_next()
+
 
 def siamese_net(audio_frames=None,
                 num_features=640,
@@ -135,10 +170,30 @@ def siamese_net(audio_frames=None,
         return net
 
 
-def get_label(feature_input, label, seq_length, batch_size, similarity_margin=0.025):
-    feature_input = tf.reshape(feature_input, [batch_size, 2, seq_length, 640])
-    label = tf.reshape(label, [batch_size, 2, seq_length, 2])
-    return feature_input, label
+def get_label(feature_input, label, num_features, seq_length, similarity_margin=0.025):
+    feature_input = tf.reshape(feature_input, (-1, 2, seq_length, num_features))
+    label = tf.reshape(label, (-1, 2, seq_length, 2))
+
+    y1 = label[:, 0, :, :]
+    y2 = label[:, 1, :, :]
+
+    spacial_dist = tf.norm(y1-y2,
+                           ord='euclidean',
+                           axis=-1)
+    similar_pairs = spacial_dist <= similarity_margin  # -1, seq_length
+
+    pair_label = tf.cast(similar_pairs, dtype=tf.int32)
+    return feature_input, pair_label, label
+
+
+def get_window_for_each_file_fn(ds, seq_length):
+    ds = ds.map(parse_fn)
+    ds = ds.window(size=seq_length, shift=1, stride=1, drop_remainder=True)
+    ds = ds.interleave(lambda xx, yy: tf.data.Dataset.zip((xx.batch(500), yy.batch(seq_length))),
+                       cycle_length=1,
+                       block_length=seq_length)
+    ds = ds.map(lambda x, y: (tf.transpose(x, [1, 0, 2]), tf.squeeze(y)))
+    return ds
 
 
 def parse_fn(example):
@@ -174,7 +229,6 @@ def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32
         The raw audio examples and the corresponding arousal/valence
         labels.
     """
-
     root_path = Path(dataset_dir) / split_name
     paths = [str(x) for x in root_path.glob('*.tfrecords')]
     paths.sort()
@@ -182,19 +236,24 @@ def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32
     filename_queue = tf.data.Dataset.list_files(paths,
                                                 shuffle=is_training,
                                                 seed=None)
+    if is_training:
+        dataset = filename_queue.map(tf.data.TFRecordDataset)
+        dataset = dataset.interleave(map_func=lambda x: get_window_for_each_file_fn(x, seq_length=seq_length),
+                                     cycle_length=9)
+        dataset = dataset.shuffle(buffer_size=50000)
+        dataset = dataset.batch(batch_size=batch_size)
+    else:
+        dataset = filename_queue.interleave(tf.data.TFRecordDataset, cycle_length=9)
+        dataset = dataset.map(parse_fn)
+        dataset = dataset.batch(batch_size=seq_length)
+        dataset = dataset.map(lambda x, y: (tf.transpose(x, [1, 0, 2]), tf.squeeze(y)))
+        dataset = dataset.batch(batch_size=batch_size)
 
-    dataset = filename_queue.interleave(tf.data.TFRecordDataset, cycle_length=1)
-    dataset = dataset.map(map_func=parse_fn)
-    dataset = dataset.batch(batch_size=seq_length)
-    dataset = dataset.map(lambda x, y: (tf.transpose(x, [1, 0, 2]), y))
-    dataset = dataset.repeat(2)
-    dataset = dataset.shuffle(buffer_size=7500*9)
-    dataset = dataset.batch(batch_size=batch_size*2)
     dataset = dataset.map(lambda x, y: get_label(x, y,
-                                                 seq_length,
-                                                 batch_size=batch_size,
+                                                 num_features=640,
+                                                 seq_length=seq_length,
                                                  similarity_margin=0.05))
-    dataset = dataset.prefetch(buffer_size=1000)
+    dataset = dataset.prefetch(1000)
     return dataset
 
 
@@ -347,7 +406,7 @@ def contrastive_loss(similarity_labels, features, batch_size, seq_length, latent
     # Only select same number of true and false labels
     similarity_labels = tf.reshape(similarity_labels, (-1, 2))
     features = tf.reshape(features, (-1, latent_dim))
-    total_num = batch_size * seq_length * 2
+    total_num = batch_size * seq_length
     perm_idx = tf.random_shuffle(tf.range(start=0, limit=total_num, dtype=tf.int32))
 
     similarity_labels = tf.gather(similarity_labels, perm_idx, axis=0)
@@ -410,6 +469,7 @@ def train(dataset_dir=None,
     loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size/seq_length/2))))
     dev_loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size/seq_length/2)))) # 9 files
     g = tf.Graph()
+
     with g.as_default():
         # Define the datasets
         train_ds = get_dataset(dataset_dir,
@@ -438,9 +498,9 @@ def train(dataset_dir=None,
         feature_input_2 = tf.placeholder(dtype=tf.float32,
                                        shape=[None, 1, seq_length, num_features],  # Can feed any shape
                                        name='feature_input_2_placeholder')
-        # label_input = tf.placeholder(dtype=tf.float32,
-        #                              shape=[None, seq_length, 1],  # Can feed any shape
-        #                              name='label_input_placeholder')
+        label_input = tf.placeholder(dtype=tf.float32,
+                                     shape=[None, seq_length, 1],  # Can feed any shape
+                                     name='label_input_placeholder')
         origin_label_input = tf.placeholder(dtype=tf.float32,
                                             shape=[None, 2, seq_length, 2],  # Can feed any shape
                                             name='origin_label_input_placeholder')
@@ -458,10 +518,10 @@ def train(dataset_dir=None,
                              is_training=is_training,
                              latent_dim=latent_dim)
 
-        # all_embeddings = tf.norm(pred_1 - pred_2, axis=-1, keepdims=True)
         pred_1 = tf.reshape(pred_1, (-1, 1, seq_length, latent_dim))
         pred_2 = tf.reshape(pred_2, (-1, 1, seq_length, latent_dim))
         all_embeddings = tf.concat([pred_1, pred_2], axis=1)
+
         # Define the loss function
         total_loss,\
         embedding_distance,\
@@ -496,7 +556,7 @@ def train(dataset_dir=None,
                                      axis=-1)
         # MSE
         metrics_list, metrics_update_op_list = get_metrics_op(pair_list=[(label_input,
-                                                                          tf.cast(pair_wise_distance < 0.05, dtype=tf.int32)),
+                                                                          tf.cast(pair_wise_distance < 0.5, dtype=tf.int32)),
                                                                          (embedding_distance, pair_labels)],
                                                               names=['ACC', 'mean_distance_ratio'],
                                                               batch_size=batch_size)
@@ -549,7 +609,7 @@ def train(dataset_dir=None,
                     with tqdm(total=int(total_num/batch_size/seq_length), desc='Training') as pbar:
                         while True:
                             # Retrieve the values
-                            features_value, origin_label = sess.run(dataset_iter)
+                            features_value, pair_label, origin_label = sess.run(dataset_iter)
 
                             _, loss, summary, _, = sess.run((train,
                                                             total_loss,
