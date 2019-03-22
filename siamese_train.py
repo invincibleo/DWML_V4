@@ -185,10 +185,10 @@ def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32
 
     dataset = filename_queue.interleave(tf.data.TFRecordDataset, cycle_length=1)
     dataset = dataset.map(map_func=parse_fn)
-    dataset = dataset.shuffle(buffer_size=7500*9)
     dataset = dataset.batch(batch_size=seq_length)
     dataset = dataset.map(lambda x, y: (tf.transpose(x, [1, 0, 2]), y))
-    # dataset = dataset.repeat(100)
+    dataset = dataset.repeat(2)
+    dataset = dataset.shuffle(buffer_size=7500*9)
     dataset = dataset.batch(batch_size=batch_size*2)
     dataset = dataset.map(lambda x, y: get_label(x, y,
                                                  seq_length,
