@@ -263,7 +263,7 @@ if __name__ == "__main__":
                                                  feed_dict={feature_input_1: features_value,
                                                             is_training: False})
 
-                    ground_truth_all[count_num, :] = ground_truth[:, 0, :]
+                    ground_truth_all[count_num, :, :] = ground_truth[:, 0, :]
                     prediction_all[count_num, :, :] = prediction_values
                     pbar.update(batch_size)
                     count_num += 1
@@ -315,7 +315,7 @@ if __name__ == "__main__":
                                                  feed_dict={feature_input_1: features_value,
                                                             is_training: False})
 
-                    ground_truth_all[count_num, :] = ground_truth[:, 0, :]
+                    ground_truth_all[count_num, :, :] = ground_truth[:, 0, :]
                     prediction_all[count_num, :, :] = prediction_values
                     pbar.update(batch_size)
                     count_num += 1

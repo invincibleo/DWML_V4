@@ -34,61 +34,154 @@ print("Eager execution: {}".format(tf.executing_eagerly()))
 
 def siamese_net(audio_frames=None,
                 num_features=640,
+                seq_length=500,
+                batch_size=2,
                 is_training=False,
                 latent_dim=3):
-    with tf.variable_scope("Encoder", reuse=tf.AUTO_REUSE):
-        net = tf.reshape(audio_frames, [-1, num_features])
-        net = tf.layers.dropout(net, rate=0.5, training=is_training)
-        net = tf.layers.Dense(50, activation=tf.nn.relu)(net)
-        net = tf.layers.Dense(latent_dim)(net)
+    with tf.variable_scope("Siamese_net", reuse=tf.AUTO_REUSE):
+        audio_input = tf.reshape(audio_frames, [-1, 1, 640, 1])
+
+        # ### Maybe adding a batchnormalization to normalize input
+        # All conv2d should be SAME padding
+        # net = tf.layers.dropout(audio_input,
+        #                         rate=0.5,
+        #                         training=is_training,
+        #                         name='Input_Dropout')
+        net = tf.layers.conv2d(audio_input,
+                               filters=64,
+                               kernel_size=(1, 8),
+                               strides=(1, 1),
+                               padding='same',
+                               data_format='channels_last',
+                               activation=None,
+                               use_bias=True,
+                               name='Conv2d_1')
+
+        net = tf.nn.max_pool(
+            net,
+            ksize=[1, 1, 10, 1],
+            strides=[1, 1, 10, 1],
+            padding='SAME',
+            name='Maxpooling_1')
+
+        net = tf.layers.dropout(net,
+                                rate=0.5,
+                                training=is_training,
+                                name='Dropout_1')
+
+        # Original model had 400 output filters for the second conv layer
+        # but this trains much faster and achieves comparable accuracy.
+        net = tf.layers.conv2d(net,
+                               filters=128,
+                               kernel_size=(1, 6),
+                               strides=(1, 1),
+                               padding='same',
+                               data_format='channels_last',
+                               activation=None,
+                               use_bias=True,
+                               name='Conv2d_2')
+
+        net = tf.nn.max_pool(
+            net,
+            ksize=[1, 1, 8, 1],
+            strides=[1, 1, 8, 1],
+            padding='SAME',
+            name='Maxpooling_2')
+
+        net = tf.layers.dropout(net,
+                                rate=0.5,
+                                training=is_training,
+                                name='Dropout_2')
+
+        net = tf.layers.conv2d(net,
+                               filters=256,
+                               kernel_size=(1, 6),
+                               strides=(1, 1),
+                               padding='same',
+                               data_format='channels_last',
+                               activation=None,
+                               use_bias=True,
+                               name='Conv2d_3')
+
+        net = tf.reshape(net, (-1, num_features // 80, 256, 1))  # -1 -> batch_size*seq_length
+
+        # Pooling over the feature maps.
+        net = tf.nn.max_pool(
+            net,
+            ksize=[1, 1, 8, 1],
+            strides=[1, 1, 8, 1],
+            padding='SAME',
+            name='Maxpooling_3')
+
+        net = tf.layers.dropout(net,
+                                rate=0.5,
+                                training=is_training,
+                                name='Dropout_3')
+
+        net = tf.reshape(net, (-1, seq_length, num_features // 80 * 32))  # -1 -> batch_size
+
+        stacked_lstm = []
+        for iiLyr in range(2):
+            stacked_lstm.append(
+                tf.nn.rnn_cell.LSTMCell(num_units=latent_dim, use_peepholes=True, cell_clip=100, state_is_tuple=True))
+        stacked_lstm = tf.nn.rnn_cell.MultiRNNCell(cells=stacked_lstm, state_is_tuple=True)
+
+        # We have to specify the dimensionality of the Tensor so we can allocate
+        # weights for the fully connected layers.
+        outputs, _ = tf.nn.dynamic_rnn(stacked_lstm, net, dtype=tf.float32)
+
+        net = tf.reshape(outputs, (batch_size, -1, latent_dim))  # -1 -> batch_size*seq_length
+
         return net
 
 
-def get_label(feature_input, label, similarity_margin=0.025):
-    feature_input = tf.reshape(feature_input, [-1, 2, 640])
-    label = tf.reshape(label, [-1, 2, 2])
+def get_label(feature_input, label, seq_length, batch_size, similarity_margin=0.025):
+    feature_input = tf.reshape(feature_input, [batch_size, 2, seq_length, 640])
+    label = tf.reshape(label, [batch_size, 2, seq_length, 2])
 
     # only check the first dimension for similarity computation
-    y_1 = label[:, 0, 1]
-    y_2 = label[:, 1, 1]
+    y_1 = label[:, 0, :, :]
+    y_2 = label[:, 1, :, :]
+    similarity = tf.norm(y_1 - y_2,
+                         ord='euclidean',
+                         axis=-1) <= similarity_margin
 
-    similarity = tf.abs(y_1 - y_2) <= similarity_margin
-    true_labels = tf.where(similarity)
+    # true_labels = tf.where(similarity)  # Every row is the true index
     # Get same amount of random false_labels examples
-    false_labels = tf.where(tf.logical_not(similarity))
-    false_labels = tf.random.shuffle(false_labels)
+    # false_labels = tf.where(tf.logical_not(similarity))
+    # false_labels = tf.random.shuffle(false_labels)
 
-    num_true_labels = tf.shape(true_labels)[0]
-    num_false_labels = tf.shape(false_labels)[0]
+    # num_true_labels = tf.shape(true_labels)[0]
+    # num_false_labels = tf.shape(false_labels)[0]
 
-    false_labels = false_labels[:tf.minimum(num_true_labels, num_false_labels), :]
-    num_false_labels = tf.shape(false_labels)[0]
+    # false_labels = false_labels[:tf.minimum(num_true_labels, num_false_labels), :]
+    # num_false_labels = tf.shape(false_labels)[0]
 
-    feature_true = tf.gather(feature_input, true_labels[:, 0])
-    feature_false = tf.gather(feature_input, false_labels[:, 0])
-    label_true = tf.gather(label, true_labels[:, 0])
-    label_false = tf.gather(label, false_labels[:, 0])
+    # feature_true = tf.gather(feature_input, true_labels[:, -1], axis=-2)
+    # feature_false = tf.gather(feature_input, false_labels[:, -1], axis=-2)
+    # label_true = tf.gather(label, true_labels[:, -1])
+    # label_false = tf.gather(label, false_labels[:, -1])
 
-    pair_labels_true = tf.ones((num_true_labels, 1), dtype=tf.int32)
-    pair_labels_false = tf.zeros((num_false_labels, 1), dtype=tf.int32)
+    # pair_labels_true = tf.ones((batch_size, num_true_labels, 1), dtype=tf.int32)
+    # pair_labels_false = tf.zeros((batch_size, num_false_labels, 1), dtype=tf.int32)
 
-    feature_input = tf.concat([feature_true, feature_false], axis=0)
-    pair_labels = tf.concat([pair_labels_true, pair_labels_false], axis=0)
-    original_label = tf.concat([label_true, label_false], axis=0)
+    # feature_input = tf.concat([feature_true, feature_false], axis=0)
+    # pair_labels = tf.concat([pair_labels_true, pair_labels_false], axis=0)
+    # original_label = tf.concat([label_true, label_false], axis=0)
 
-    total_num = num_true_labels + num_false_labels
-    if total_num != tf.constant(0):
-        perm_idx = tf.random_shuffle(tf.range(start=0, limit=total_num, dtype=tf.int32))
-        # shuffle the batch elements
-        feature_input = tf.gather(feature_input, perm_idx)
-        pair_labels = tf.gather(pair_labels, perm_idx)
-        original_label = tf.gather(original_label, perm_idx)
+    # total_num = num_true_labels + num_false_labels
+    # if total_num != tf.constant(0):
+    #     perm_idx = tf.random_shuffle(tf.range(start=0, limit=total_num, dtype=tf.int32))
+    #     # shuffle the batch elements
+    #     feature_input = tf.gather(feature_input, perm_idx)
+    #     pair_labels = tf.gather(pair_labels, perm_idx)
+    #     original_label = tf.gather(original_label, perm_idx)
 
-    feature_input = tf.reshape(feature_input, [total_num, 2, 640])
-    pair_labels = tf.reshape(pair_labels, [total_num, 1])
-    original_label = tf.reshape(original_label, [total_num, 2, 2])
-
-    return feature_input, pair_labels, original_label
+    # feature_input = tf.reshape(feature_input, [batch_size, 2, total_num, 640])
+    # pair_labels = tf.reshape(pair_labels, [batch_size, total_num, 1])
+    # original_label = tf.reshape(original_label, [batch_size, 2, total_num, 2])
+    pair_labels = tf.cast(tf.reshape(similarity, (batch_size, seq_length, 1)), dtype=tf.int32)
+    return feature_input, pair_labels, label
 
 
 def parse_fn(example):
@@ -136,12 +229,15 @@ def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32
     dataset = filename_queue.interleave(tf.data.TFRecordDataset, cycle_length=1)
     dataset = dataset.map(map_func=parse_fn)
     dataset = dataset.shuffle(buffer_size=7500*9)
-    # dataset = dataset.batch(batch_size=seq_length)
-    # dataset = dataset.map(lambda x, y: (dict(features=tf.transpose(x['features'], [1, 0, 2])), y))
+    dataset = dataset.batch(batch_size=seq_length)
+    dataset = dataset.map(lambda x, y: (dict(features=tf.transpose(x, [1, 0, 2])), y))
     # dataset = dataset.repeat(100)
-    dataset = dataset.batch(batch_size=batch_size)
-    dataset = dataset.map(lambda x, y: get_label(x, y, similarity_margin=0.025))
-    dataset = dataset.prefetch(buffer_size=100000)
+    dataset = dataset.batch(batch_size=batch_size*2)
+    dataset = dataset.map(lambda x, y: get_label(x['features'], y,
+                                                 seq_length,
+                                                 batch_size=batch_size,
+                                                 similarity_margin=0.05))
+    dataset = dataset.prefetch(buffer_size=1000)
     return dataset
 
 
@@ -227,21 +323,13 @@ def get_optimizer_train_op(total_loss, learning_rate):
     return train_op
 
 
-def mean_distance_ratio(embedding_input, label, similarity_margin=1):
-    # feature_input = tf.reshape(feature_input, [-1, 2, 481])
-    # label = tf.reshape(label, [-1, 2, 2])
-
-    # only check the first dimension for similarity computation
-    # y_1 = label[:, 0, 1] #TODO need to change the last dim so that to choose elevation or azimuth
-    # y_2 = label[:, 1, 1]
-
-    # similarity = tf.abs(y_1 - y_2) <= similarity_margin
-    label = tf.reshape(label, [-1, ])
+def mean_distance_ratio(embedding_input, label, batch_size):
+    label = tf.reshape(label, [batch_size, -1])
     true_labels = tf.where(tf.cast(label, dtype=tf.bool))
     false_labels = tf.where(tf.logical_not(tf.cast(label, dtype=tf.bool)))
 
-    feature_true = tf.gather(embedding_input, true_labels[:, 0])
-    feature_false = tf.gather(embedding_input, false_labels[:, 0])
+    feature_true = tf.gather(embedding_input, true_labels[:, -1], axis=-2)
+    feature_false = tf.gather(embedding_input, false_labels[:, -1], axis=-2)
 
     true_pair_distance = tf.norm(feature_true[:, 0, :] - feature_true[:, 1, :],
                                  ord='euclidean',
@@ -257,7 +345,7 @@ def mean_distance_ratio(embedding_input, label, similarity_margin=1):
     return ratio, true_mean_update_op, false_mean_update_op
 
 
-def get_metrics_op(pair_list=[], names=[]):
+def get_metrics_op(pair_list=[], names=[], batch_size=2):
     # ACC
     with tf.name_scope('my_metrics'):
         metrics_list = []
@@ -270,7 +358,8 @@ def get_metrics_op(pair_list=[], names=[]):
                 metrics_update_op_list.append(acc_update_op)
                 tf.summary.scalar('metric/{}'.format(names[idx]), acc)
             if idx == 1:
-                ratio, true_mean_update_op, false_mean_update_op = mean_distance_ratio(item[0], item[1], similarity_margin=1)
+                ratio, true_mean_update_op, false_mean_update_op = mean_distance_ratio(item[0], item[1],
+                                                                                       batch_size=batch_size)
                 metrics_list.append(ratio)
                 metrics_update_op_list.append(true_mean_update_op)
                 metrics_update_op_list.append(false_mean_update_op)
@@ -299,48 +388,46 @@ def save_model(sess,
                                outputs=outputs)
 
 
-def create_pairs_label(x_train, y, numDissimilar, similarity_margin):
-
-    pairs = []
-    indicators = []
-    numpts = x_train.shape[0]
-
-    for i in range(x_train.shape[0]):
-
-            current_y = y[i]
-            currentPt = x_train[i, :]
-
-            indices = np.where(np.abs(y-current_y) <= similarity_margin)[0]
-            similarPts = x_train[indices, :]
-
-            for j in range(0, similarPts.shape[0]):
-                pairs += [[currentPt, similarPts[j, :]]]
-                indicators += [1]
-
-            # add dissimilar points
-            dissimilarToCurrent = np.arange(0,numpts)
-            dissimilarToCurrent = np.delete(dissimilarToCurrent, indices)
-            randomPick = np.random.choice(dissimilarToCurrent, numDissimilar)
-
-            for j in range(0, randomPick.shape[0]):
-
-                pairs += [[currentPt, x_train[randomPick[j], :]]]
-                indicators += [0]
-
-    return np.array(pairs), np.array(indicators)
-
-
 def contrastive_loss(similarity_labels, distances):
 
     '''Contrastive loss from Hadsell-et-al.'06
     http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
     '''
+    # Only select same number of true and false labels
+    similarity_labels = tf.squeeze(similarity_labels, axis=-1)
+    distances = tf.squeeze(distances, axis=-1)
+    true_labels = tf.where(tf.cast(similarity_labels, dtype=tf.bool))  # Every row is the true index
+    # Get same amount of random false_labels examples
+    false_labels = tf.where(tf.logical_not(tf.cast(similarity_labels, dtype=tf.bool)))
+    false_labels = tf.random.shuffle(false_labels)
+
+    num_true_labels = tf.shape(true_labels)[0]
+    num_false_labels = tf.shape(false_labels)[0]
+
+    min_num = tf.minimum(num_true_labels, num_false_labels)
+    true_labels = true_labels[:min_num, :]
+    false_labels = false_labels[:min_num, :]
+    num_true_labels = tf.shape(true_labels)[0]
+    num_false_labels = tf.shape(false_labels)[0]
+
+    feature_true = tf.gather(distances, true_labels[:, -1], axis=-1)
+    feature_false = tf.gather(distances, false_labels[:, -1], axis=-1)
+    label_true = tf.gather(similarity_labels, true_labels[:, -1], axis=-1)
+    label_false = tf.gather(similarity_labels, false_labels[:, -1], axis=-1)
+
+    feature_input = tf.concat([feature_true, feature_false], axis=1)
+    pair_labels = tf.concat([label_true, label_false], axis=1)
+
+    total_num = num_true_labels + num_false_labels
+
+    feature_input = tf.reshape(feature_input, [-1, total_num])
+    pair_labels = tf.reshape(pair_labels, [-1, total_num])
 
     mu = 1  # the margin. parameter to maybe be tuned
-    distsq = tf.square(distances)
-    distsq_contrastive = tf.square(tf.maximum(mu - distances, 0))
+    distsq = tf.square(feature_input)
+    distsq_contrastive = tf.square(tf.maximum(mu - feature_input, 0))
 
-    loss = tf.reduce_mean(similarity_labels * distsq + (1 - similarity_labels) * distsq_contrastive)
+    loss = tf.reduce_mean(pair_labels * distsq + (1 - pair_labels) * distsq_contrastive)
     return loss
 
 
@@ -357,8 +444,8 @@ def train(dataset_dir=None,
           output_dir='./output_dir'):
 
     total_num = 7500 * 9
-    loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size))))
-    dev_loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size)))) # 9 files
+    loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size/seq_length/2))))
+    dev_loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size/seq_length/2)))) # 9 files
     g = tf.Graph()
     with g.as_default():
         # Define the datasets
@@ -382,29 +469,33 @@ def train(dataset_dir=None,
 
         # Placeholder for variable is_training and feature_input
         is_training = tf.placeholder(tf.bool, shape=())
-        feature_input_1 = tf.placeholder(dtype=tf.float64,
-                                       shape=[None, 1, num_features],  # Can feed any shape
+        feature_input_1 = tf.placeholder(dtype=tf.float32,
+                                       shape=[None, 1, seq_length, num_features],  # Can feed any shape
                                        name='feature_input_1_placeholder')
-        feature_input_2 = tf.placeholder(dtype=tf.float64,
-                                       shape=[None, 1, num_features],  # Can feed any shape
+        feature_input_2 = tf.placeholder(dtype=tf.float32,
+                                       shape=[None, 1, seq_length, num_features],  # Can feed any shape
                                        name='feature_input_2_placeholder')
-        label_input = tf.placeholder(dtype=tf.float64,
-                                     shape=[None, 1],  # Can feed any shape
+        label_input = tf.placeholder(dtype=tf.float32,
+                                     shape=[None, seq_length, 1],  # Can feed any shape
                                      name='label_input_placeholder')
-        origin_label_input = tf.placeholder(dtype=tf.float64,
-                                            shape=[None, 2, 2],  # Can feed any shape
+        origin_label_input = tf.placeholder(dtype=tf.float32,
+                                            shape=[None, 2, seq_length, 2],  # Can feed any shape
                                             name='origin_label_input_placeholder')
         # Get the output tensor
         pred_1 = siamese_net(audio_frames=feature_input_1,
                              num_features=num_features,
+                             seq_length=seq_length,
+                             batch_size=batch_size,
                              is_training=is_training,
                              latent_dim=latent_dim)
         pred_2 = siamese_net(audio_frames=feature_input_2,
                              num_features=num_features,
+                             seq_length=seq_length,
+                             batch_size=batch_size,
                              is_training=is_training,
                              latent_dim=latent_dim)
 
-        distance = tf.norm(pred_1 - pred_2, axis=1, keepdims=True)
+        distance = tf.norm(pred_1 - pred_2, axis=-1, keepdims=True)
         # Define the loss function
         total_loss = contrastive_loss(similarity_labels=label_input, distances=distance)
         tf.summary.scalar('losses/total_loss', total_loss)
@@ -428,10 +519,13 @@ def train(dataset_dir=None,
         # MSE
         metrics_list, metrics_update_op_list = get_metrics_op(pair_list=[(label_input,
                                                                           tf.cast(distance < 0.5, dtype=tf.int32)),
-                                                                         (tf.concat([tf.reshape(pred_1, [-1, 1, latent_dim]),
-                                                                                     tf.reshape(pred_2, [-1, 1, latent_dim])], axis=1),
+                                                                         (tf.concat([tf.reshape(pred_1,
+                                                                                                [-1, seq_length, latent_dim]),
+                                                                                     tf.reshape(pred_2,
+                                                                                                [-1, seq_length, latent_dim])], axis=1),
                                                                           label_input)],
-                                                              names=['ACC', 'mean_distance_ratio'])
+                                                              names=['ACC', 'mean_distance_ratio'],
+                                                              batch_size=batch_size)
 
         # Metrics initializer
         metrics_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="my_metrics")
@@ -464,7 +558,7 @@ def train(dataset_dir=None,
                                 "distance": distance})
 
             # Epochs
-            val_old_metric, val_new_metric = [0], [0]
+            val_old_metric, val_new_metric = [np.inf], [0]
             for epoch_no in range(epochs):
                 print('\nEpoch No: {}'.format(epoch_no))
                 train_loss, val_loss = 0.0, 0.0
@@ -478,7 +572,7 @@ def train(dataset_dir=None,
                 # Training phase
                 try:
                     sess.run(training_init_op)
-                    with tqdm(total=int(total_num/batch_size), desc='Training') as pbar:
+                    with tqdm(total=int(total_num/batch_size/seq_length), desc='Training') as pbar:
                         while True:
                             # Retrieve the values
                             features_value, pair_ground_truth, origin_label = sess.run(dataset_iter)
@@ -487,8 +581,8 @@ def train(dataset_dir=None,
                                                             total_loss,
                                                             merged,
                                                             metrics_update_op_list),
-                                                           feed_dict={feature_input_1: features_value[:, [0], :],
-                                                                      feature_input_2: features_value[:, [1], :],
+                                                           feed_dict={feature_input_1: features_value[:, [0], :, :],
+                                                                      feature_input_2: features_value[:, [1], :, :],
                                                                       is_training: True,
                                                                       label_input: pair_ground_truth,
                                                                       origin_label_input: origin_label})
@@ -499,8 +593,8 @@ def train(dataset_dir=None,
                 except tf.errors.OutOfRangeError:
                     train_loss /= count_num_train
                     train_mse, summary = sess.run([metrics_list, merged],
-                                                  feed_dict={feature_input_1: features_value[:, [0], :],
-                                                             feature_input_2: features_value[:, [1], :],
+                                                  feed_dict={feature_input_1: features_value[:, [0], :, :],
+                                                             feature_input_2: features_value[:, [1], :, :],
                                                              is_training: False,
                                                              label_input: pair_ground_truth,
                                                              origin_label_input: origin_label})
@@ -514,15 +608,15 @@ def train(dataset_dir=None,
                 # Validation 10 phase
                 try:
                     sess.run(dev_init_op)
-                    with tqdm(total=int(total_num/batch_size), desc='Validation') as pbar_dev:
+                    with tqdm(total=int(total_num/batch_size/seq_length), desc='Validation') as pbar_dev:
                         while True:
                             # Retrieve the values
                             features_value, pair_ground_truth, origin_label = sess.run(dataset_iter)
                             loss, summary, _, = sess.run((total_loss,
                                                          merged,
                                                          metrics_update_op_list),
-                                                        feed_dict={feature_input_1: features_value[:, [0], :],
-                                                                   feature_input_2: features_value[:, [1], :],
+                                                        feed_dict={feature_input_1: features_value[:, [0], :, :],
+                                                                   feature_input_2: features_value[:, [1], :, :],
                                                                    is_training: False,
                                                                    label_input: pair_ground_truth,
                                                                    origin_label_input: origin_label})
@@ -533,8 +627,8 @@ def train(dataset_dir=None,
                 except tf.errors.OutOfRangeError:
                     val_loss /= count_num_dev
                     val_mse, summary = sess.run([metrics_list, merged],
-                                                feed_dict={feature_input_1: features_value[:, [0], :],
-                                                           feature_input_2: features_value[:, [1], :],
+                                                feed_dict={feature_input_1: features_value[:, [0], :, :],
+                                                           feature_input_2: features_value[:, [1], :, :],
                                                            is_training: False,
                                                            label_input: pair_ground_truth,
                                                            origin_label_input: origin_label})
@@ -547,7 +641,7 @@ def train(dataset_dir=None,
                     val_new_metric = [val_mse[1]]
 
                 # Have some penalty for the large shoot at beginning
-                if val_new_metric >= [x for x in val_old_metric]:
+                if val_new_metric <= [x for x in val_old_metric]:
                     # Save the model
                     save_path = modal_saver.save(sess,
                                                  save_path=output_dir + "/model.ckpt",
