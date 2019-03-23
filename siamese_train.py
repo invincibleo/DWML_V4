@@ -187,6 +187,7 @@ def get_label(feature_input, label, num_features, seq_length, similarity_margin=
 
 
 def get_window_for_each_file_fn(ds, seq_length):
+    ds = tf.data.TFRecordDataset(ds)
     ds = ds.map(parse_fn)
     ds = ds.window(size=seq_length, shift=1, stride=1, drop_remainder=True)
     ds = ds.interleave(lambda xx, yy: tf.data.Dataset.zip((xx.batch(500), yy.batch(seq_length))),
@@ -237,10 +238,9 @@ def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32
                                                 shuffle=is_training,
                                                 seed=None)
     if is_training:
-        dataset = filename_queue.map(tf.data.TFRecordDataset)
-        dataset = dataset.interleave(map_func=lambda x: get_window_for_each_file_fn(x, seq_length=seq_length),
+        dataset = filename_queue.interleave(map_func=lambda x: get_window_for_each_file_fn(x, seq_length=seq_length),
                                      cycle_length=9)
-        dataset = dataset.shuffle(buffer_size=50000)
+        dataset = dataset.shuffle(buffer_size=1000)
         dataset = dataset.batch(batch_size=batch_size)
     else:
         dataset = filename_queue.interleave(tf.data.TFRecordDataset, cycle_length=9)
@@ -466,8 +466,8 @@ def train(dataset_dir=None,
           output_dir='./output_dir'):
 
     total_num = 7500 * 9
-    loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size/seq_length/2))))
-    dev_loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size/seq_length/2)))) # 9 files
+    # loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size/seq_length/2))))
+    # dev_loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size/seq_length/2)))) # 9 files
     g = tf.Graph()
 
     with g.as_default():
@@ -620,7 +620,7 @@ def train(dataset_dir=None,
                                                                       is_training: True,
                                                                       origin_label_input: origin_label})
                             train_loss += loss
-                            loss_list[epoch_no, count_num_train] = loss
+                            # loss_list[epoch_no, count_num_train] = loss
                             pbar.update(batch_size)
                             count_num_train += 1
                 except tf.errors.OutOfRangeError:
@@ -652,7 +652,7 @@ def train(dataset_dir=None,
                                                                    is_training: False,
                                                                    origin_label_input: origin_label})
                             val_loss += loss
-                            dev_loss_list[epoch_no, count_num_dev] = loss
+                            # dev_loss_list[epoch_no, count_num_dev] = loss
                             pbar_dev.update(int(batch_size))
                             count_num_dev += 1
                 except tf.errors.OutOfRangeError:
@@ -691,7 +691,7 @@ def train(dataset_dir=None,
                                 "pred_2": pred_2,
                                 "all_embeddings": all_embeddings})
 
-    return loss_list, dev_loss_list
+    return [0], [0]
 
 
 if __name__ == "__main__":
