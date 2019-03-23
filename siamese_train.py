@@ -339,8 +339,8 @@ def get_optimizer_train_op(total_loss, learning_rate):
     return train_op
 
 
-def mean_distance_ratio(embedding_input, label, batch_size):
-    label = tf.reshape(label, [batch_size, -1])
+def mean_distance_ratio(embedding_input, label, seq_length):
+    label = tf.reshape(label, [-1, seq_length])
     true_labels = tf.where(tf.cast(label, dtype=tf.bool))
     false_labels = tf.where(tf.logical_not(tf.cast(label, dtype=tf.bool)))
 
@@ -355,7 +355,7 @@ def mean_distance_ratio(embedding_input, label, batch_size):
     return ratio, true_mean_update_op, false_mean_update_op
 
 
-def get_metrics_op(pair_list=[], names=[], batch_size=2):
+def get_metrics_op(pair_list=[], names=[], seq_length=100):
     # ACC
     with tf.name_scope('my_metrics'):
         metrics_list = []
@@ -369,7 +369,7 @@ def get_metrics_op(pair_list=[], names=[], batch_size=2):
                 tf.summary.scalar('metric/{}'.format(names[idx]), acc)
             if idx == 1:
                 ratio, true_mean_update_op, false_mean_update_op = mean_distance_ratio(item[0], item[1],
-                                                                                       batch_size=batch_size)
+                                                                                       seq_length=seq_length)
                 metrics_list.append(ratio)
                 metrics_update_op_list.append(true_mean_update_op)
                 metrics_update_op_list.append(false_mean_update_op)
@@ -432,7 +432,7 @@ def train(dataset_dir=None,
     # loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size/seq_length/2))))
     # dev_loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size/seq_length/2)))) # 9 files
     g = tf.Graph()
-
+    val_atch_size = 15
     with g.as_default():
         # Define the datasets
         train_ds = get_dataset(dataset_dir,
@@ -446,7 +446,7 @@ def train(dataset_dir=None,
         dev_ds = get_dataset(dataset_dir,
                            is_training=False,
                            split_name='valid',
-                           batch_size=batch_size,
+                           batch_size=val_atch_size,
                            seq_length=seq_length,
                            debugging=False)
 
@@ -514,7 +514,7 @@ def train(dataset_dir=None,
                                                                           tf.cast(embedding_dist < 0.5, dtype=tf.int32)),
                                                                          (embedding_dist, label_input)],
                                                               names=['ACC', 'mean_distance_ratio'],
-                                                              batch_size=batch_size)
+                                                              seq_length=seq_length)
 
         # Metrics initializer
         metrics_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="my_metrics")
@@ -597,7 +597,7 @@ def train(dataset_dir=None,
                 # Validation 10 phase
                 try:
                     sess.run(dev_init_op)
-                    with tqdm(total=int(total_num/batch_size/seq_length), desc='Validation') as pbar_dev:
+                    with tqdm(total=int(total_num/val_atch_size/seq_length), desc='Validation') as pbar_dev:
                         while True:
                             # Retrieve the values
                             features_value, origin_label = sess.run(dataset_iter)
@@ -611,7 +611,7 @@ def train(dataset_dir=None,
                                                                    origin_label_input: origin_label})
                             val_loss += loss
                             # dev_loss_list[epoch_no, count_num_dev] = loss
-                            pbar_dev.update(int(batch_size))
+                            pbar_dev.update(int(val_atch_size))
                             count_num_dev += 1
                 except tf.errors.OutOfRangeError:
                     val_loss /= count_num_dev
