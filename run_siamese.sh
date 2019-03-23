@@ -8,7 +8,7 @@ source /data/leuven/324/vsc32400/miniconda3/bin/activate py3new
 echo
 echo "Program outputs begins:"
 python siamese_train.py \
---batch_size 3 \
+--batch_size 6 \
 --epochs 5000 \
 --seq_length 500 \
 --latent_dim 256 \

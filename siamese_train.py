@@ -253,7 +253,7 @@ def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32
                                                  num_features=640,
                                                  seq_length=seq_length,
                                                  similarity_margin=0.05))
-    dataset = dataset.prefetch(1000)
+    dataset = dataset.prefetch(batch_size*seq_length*10)
     return dataset
 
 
@@ -340,12 +340,12 @@ def get_optimizer_train_op(total_loss, learning_rate):
 
 
 def mean_distance_ratio(embedding_input, label, batch_size):
-    # label = tf.reshape(label, [batch_size, -1])
+    label = tf.reshape(label, [batch_size, -1])
     true_labels = tf.where(tf.cast(label, dtype=tf.bool))
     false_labels = tf.where(tf.logical_not(tf.cast(label, dtype=tf.bool)))
 
-    true_pair_distance = tf.gather(embedding_input, true_labels[:, -1], axis=0)
-    false_pair_distance = tf.gather(embedding_input, false_labels[:, -1], axis=0)
+    true_pair_distance = tf.gather(embedding_input, true_labels[:, -1], axis=1)
+    false_pair_distance = tf.gather(embedding_input, false_labels[:, -1], axis=1)
 
     true_mean, true_mean_update_op = tf.metrics.mean(true_pair_distance, name='true_pair_distance_mean')
     false_mean, false_mean_update_op = tf.metrics.mean(false_pair_distance, name='false_pair_distance_mean')
@@ -403,54 +403,17 @@ def contrastive_loss(similarity_labels, features, batch_size, seq_length, latent
     '''Contrastive loss from Hadsell-et-al.'06
     http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
     '''
-    # Only select same number of true and false labels
-    similarity_labels = tf.reshape(similarity_labels, (-1, 2))
-    features = tf.reshape(features, (-1, latent_dim))
-    total_num = batch_size * seq_length
-    perm_idx = tf.random_shuffle(tf.range(start=0, limit=total_num, dtype=tf.int32))
-
-    similarity_labels = tf.gather(similarity_labels, perm_idx, axis=0)
-    features = tf.gather(features, perm_idx, axis=0)
-
-    similarity_labels = tf.reshape(similarity_labels, (-1, 2, 2))
-    features = tf.reshape(features, (-1, 2, latent_dim))
-
-    pair_distance = tf.norm(similarity_labels[:, 0, :] - similarity_labels[:, 1, :],
-                            ord='euclidean',
-                            axis=-1) <= similarity_margin
-
-    true_labels = tf.where(pair_distance)  # Every row is the true index
-    false_labels = tf.where(tf.logical_not(pair_distance))
-
-    num_true_labels = tf.shape(true_labels)[0]
-    num_false_labels = tf.shape(false_labels)[0]
-
-    min_num = tf.minimum(num_true_labels, num_false_labels)
-
-    true_labels = true_labels[:min_num, :]
-    false_labels = false_labels[:min_num, :]
-    num_true_labels = tf.shape(true_labels)[0]
-    num_false_labels = tf.shape(false_labels)[0]
-
-    feature_true = tf.gather(features, true_labels[:, -1], axis=0)
-    feature_false = tf.gather(features, false_labels[:, -1], axis=0)
-
-    label_true = tf.ones((num_true_labels, 1), dtype=tf.float32)
-    label_false = tf.zeros((num_false_labels, 1), dtype=tf.float32)
-
-    feature_input = tf.concat([feature_true, feature_false], axis=0)
-    pair_labels = tf.concat([label_true, label_false], axis=0)
-
-    embedding_distance = tf.norm(feature_input[:, 0, :] - feature_input[:, 1, :],
+    embedding_distance = tf.norm(features[:, 0, :, :] - features[:, 1, :, :],
                                  ord='euclidean',
                                  axis=-1)
+    pair_labels = similarity_labels
 
     mu = 1  # the margin. parameter to maybe be tuned
     distsq = tf.square(embedding_distance)
     distsq_contrastive = tf.square(tf.maximum(mu - embedding_distance, 0))
 
     loss = tf.reduce_mean(pair_labels * distsq + (1 - pair_labels) * distsq_contrastive)
-    return loss, embedding_distance, pair_labels
+    return loss, embedding_distance
 
 
 def train(dataset_dir=None,
@@ -499,7 +462,7 @@ def train(dataset_dir=None,
                                        shape=[None, 1, seq_length, num_features],  # Can feed any shape
                                        name='feature_input_2_placeholder')
         label_input = tf.placeholder(dtype=tf.float32,
-                                     shape=[None, seq_length, 1],  # Can feed any shape
+                                     shape=[None, seq_length],  # Can feed any shape
                                      name='label_input_placeholder')
         origin_label_input = tf.placeholder(dtype=tf.float32,
                                             shape=[None, 2, seq_length, 2],  # Can feed any shape
@@ -523,9 +486,7 @@ def train(dataset_dir=None,
         all_embeddings = tf.concat([pred_1, pred_2], axis=1)
 
         # Define the loss function
-        total_loss,\
-        embedding_distance,\
-        pair_labels = contrastive_loss(similarity_labels=origin_label_input,
+        total_loss, embedding_dist = contrastive_loss(similarity_labels=label_input,
                                       features=all_embeddings,
                                       batch_size=batch_size,
                                       seq_length=seq_length,
@@ -548,16 +509,10 @@ def train(dataset_dir=None,
         # Define the optimizer
         train = get_optimizer_train_op(total_loss=total_loss, learning_rate=learning_rate)
 
-        label_input = tf.norm(origin_label_input[:, 0, :, :] - origin_label_input[:, 1, :, :],
-                              ord='euclidean',
-                              axis=-1)
-        pair_wise_distance = tf.norm(all_embeddings[:, 0, :, :] - all_embeddings[:, 1, :, :],
-                                     ord='euclidean',
-                                     axis=-1)
         # MSE
         metrics_list, metrics_update_op_list = get_metrics_op(pair_list=[(label_input,
-                                                                          tf.cast(pair_wise_distance < 0.5, dtype=tf.int32)),
-                                                                         (embedding_distance, pair_labels)],
+                                                                          tf.cast(embedding_dist < 0.5, dtype=tf.int32)),
+                                                                         (embedding_dist, label_input)],
                                                               names=['ACC', 'mean_distance_ratio'],
                                                               batch_size=batch_size)
 
@@ -618,6 +573,7 @@ def train(dataset_dir=None,
                                                            feed_dict={feature_input_1: features_value[:, [0], :, :],
                                                                       feature_input_2: features_value[:, [1], :, :],
                                                                       is_training: True,
+                                                                      label_input: pair_label,
                                                                       origin_label_input: origin_label})
                             train_loss += loss
                             # loss_list[epoch_no, count_num_train] = loss
@@ -629,6 +585,7 @@ def train(dataset_dir=None,
                                                   feed_dict={feature_input_1: features_value[:, [0], :, :],
                                                              feature_input_2: features_value[:, [1], :, :],
                                                              is_training: False,
+                                                             label_input: pair_label,
                                                              origin_label_input: origin_label})
                     train_writer.add_summary(summary, epoch_no)
                     sess.run(metrics_vars_initializer)
@@ -650,6 +607,7 @@ def train(dataset_dir=None,
                                                         feed_dict={feature_input_1: features_value[:, [0], :, :],
                                                                    feature_input_2: features_value[:, [1], :, :],
                                                                    is_training: False,
+                                                                   label_input: pair_label,
                                                                    origin_label_input: origin_label})
                             val_loss += loss
                             # dev_loss_list[epoch_no, count_num_dev] = loss
@@ -661,6 +619,7 @@ def train(dataset_dir=None,
                                                 feed_dict={feature_input_1: features_value[:, [0], :, :],
                                                            feature_input_2: features_value[:, [1], :, :],
                                                            is_training: False,
+                                                           label_input: pair_label,
                                                            origin_label_input: origin_label})
                     val_writer.add_summary(summary, epoch_no)
                     sess.run(metrics_vars_initializer)
