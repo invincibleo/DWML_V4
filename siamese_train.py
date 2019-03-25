@@ -566,7 +566,7 @@ def train(dataset_dir=None,
                         while True:
                             # Retrieve the values
                             if count_num_train >= (7500 - seq_length) * 9 // seq_length // batch_size:
-                                features_value, pair_label, origin_label = sess.run(dataset_iter)
+                                _, _, _ = sess.run(dataset_iter)
                                 continue
 
                             features_value, pair_label, origin_label = sess.run(dataset_iter)
