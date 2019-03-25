@@ -433,7 +433,7 @@ def train(dataset_dir=None,
     # loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size/seq_length/2))))
     # dev_loss_list = np.zeros((epochs, int(np.ceil(total_num/batch_size/seq_length/2)))) # 9 files
     g = tf.Graph()
-    val_atch_size = 15
+    val_atch_size = 10
     with g.as_default():
         # Define the datasets
         train_ds = get_dataset(dataset_dir,
@@ -565,6 +565,9 @@ def train(dataset_dir=None,
                     with tqdm(total=int(total_num/batch_size/seq_length), desc='Training') as pbar:
                         while True:
                             # Retrieve the values
+                            if count_num_train >= (7500 - seq_length) * 9:
+                                features_value, pair_label, origin_label = sess.run(dataset_iter)
+
                             features_value, pair_label, origin_label = sess.run(dataset_iter)
 
                             _, loss, summary, _, = sess.run((train,
