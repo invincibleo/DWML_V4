@@ -565,7 +565,7 @@ def train(dataset_dir=None,
                     with tqdm(total=int(total_num/batch_size/seq_length), desc='Training') as pbar:
                         while True:
                             # Retrieve the values
-                            if count_num_train >= (7500 - seq_length) * 9:
+                            if count_num_train >= (7500 - seq_length) * 9 // seq_length // batch_size:
                                 features_value, pair_label, origin_label = sess.run(dataset_iter)
                                 continue
 
