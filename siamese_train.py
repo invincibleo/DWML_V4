@@ -189,8 +189,8 @@ def get_label(feature_input, label, num_features, seq_length, similarity_margin=
 def get_window_for_each_file_fn(ds, seq_length):
     ds = tf.data.TFRecordDataset(ds)
     ds = ds.map(parse_fn)
-    ds = ds.window(size=seq_length, shift=1, stride=1, drop_remainder=True)
-    ds = ds.interleave(lambda xx, yy: tf.data.Dataset.zip((xx.batch(500), yy.batch(seq_length))),
+    ds = ds.window(size=seq_length, shift=2, stride=1, drop_remainder=True)
+    ds = ds.interleave(lambda xx, yy: tf.data.Dataset.zip((xx.batch(seq_length), yy.batch(seq_length))),
                        cycle_length=1,
                        block_length=seq_length)
     ds = ds.map(lambda x, y: (tf.transpose(x, [1, 0, 2]), tf.squeeze(y)))
