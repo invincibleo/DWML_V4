@@ -9,9 +9,9 @@ echo
 echo "Program outputs begins:"
 python siamese_train.py \
 --batch_size 6 \
---epochs 5000 \
+--epochs 100 \
 --seq_length 100 \
---latent_dim 256 \
+--latent_dim 3 \
 --learning_rate_decay true \
 --learning_rate 0.001 \
 --output_dir $VSC_DATA/Learning_outputs/SER_out_siamese_LSTM \

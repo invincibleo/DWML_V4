@@ -158,14 +158,16 @@ def siamese_net(audio_frames=None,
         stacked_lstm = []
         for iiLyr in range(2):
             stacked_lstm.append(
-                tf.nn.rnn_cell.LSTMCell(num_units=latent_dim, use_peepholes=True, cell_clip=100, state_is_tuple=True))
+                tf.nn.rnn_cell.LSTMCell(num_units=256, use_peepholes=True, cell_clip=100, state_is_tuple=True))
         stacked_lstm = tf.nn.rnn_cell.MultiRNNCell(cells=stacked_lstm, state_is_tuple=True)
 
         # We have to specify the dimensionality of the Tensor so we can allocate
         # weights for the fully connected layers.
         outputs, _ = tf.nn.dynamic_rnn(stacked_lstm, net, dtype=tf.float32)
+        net = tf.reshape(outputs, (-1, 256))  # -1 -> batch_size*seq_length
 
-        net = tf.reshape(outputs, (-1, seq_length, latent_dim))  # -1 -> batch_size*seq_length
+        net = tf.layers.dense(net, 3, activation=None)
+        net = tf.reshape(net, (-1, seq_length, latent_dim))  # -1 -> batch_size*seq_length
 
         return net
 
@@ -189,7 +191,7 @@ def get_label(feature_input, label, num_features, seq_length, similarity_margin=
 def get_window_for_each_file_fn(ds, seq_length):
     ds = tf.data.TFRecordDataset(ds)
     ds = ds.map(parse_fn)
-    ds = ds.window(size=seq_length, shift=2, stride=1, drop_remainder=True)
+    ds = ds.window(size=seq_length, shift=1, stride=1, drop_remainder=True)
     ds = ds.interleave(lambda xx, yy: tf.data.Dataset.zip((xx.batch(seq_length), yy.batch(seq_length))),
                        cycle_length=1,
                        block_length=seq_length)
@@ -569,7 +571,6 @@ def train(dataset_dir=None,
                                 break
                             else:
                                 features_value, pair_label, origin_label = sess.run(dataset_iter)
-                                print(features_value.shape)
                                 _, loss, summary, _, = sess.run((train,
                                                                 total_loss,
                                                                 merged,
@@ -583,7 +584,7 @@ def train(dataset_dir=None,
                                 # loss_list[epoch_no, count_num_train] = loss
                                 pbar.update(batch_size)
                                 if count_num_train % 100 == 0:
-                                    val_writer.add_summary(summary, epoch_no * iter_total_num + count_num_train)
+                                    train_writer.add_summary(summary, epoch_no * iter_total_num + count_num_train)
                                 count_num_train += 1
                 except tf.errors.OutOfRangeError:
                     train_loss /= count_num_train
