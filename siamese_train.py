@@ -172,7 +172,7 @@ def siamese_net(audio_frames=None,
         return net
 
 
-def get_label(feature_input, label, num_features, seq_length, similarity_margin=0.1):
+def get_label(feature_input, label, num_features, seq_length, similarity_margin=0.025):
     feature_input = tf.reshape(feature_input, (-1, 2, seq_length, num_features))
     label = tf.reshape(label, (-1, 2, seq_length, 2))
 
@@ -255,7 +255,7 @@ def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32
     dataset = dataset.map(lambda x, y: get_label(x, y,
                                                  num_features=640,
                                                  seq_length=seq_length,
-                                                 similarity_margin=0.1))
+                                                 similarity_margin=0.025))
     dataset = dataset.prefetch(batch_size*seq_length*10)
     return dataset
 
@@ -353,7 +353,7 @@ def mean_distance_ratio(embedding_input, label, seq_length):
     true_mean, true_mean_update_op = tf.metrics.mean(true_pair_distance, name='true_pair_distance_mean')
     false_mean, false_mean_update_op = tf.metrics.mean(false_pair_distance, name='false_pair_distance_mean')
 
-    ratio = true_mean / false_mean
+    ratio = true_mean / (false_mean + tf.constant(1e-8))
 
     return ratio, true_mean_update_op, false_mean_update_op
 
@@ -401,7 +401,7 @@ def save_model(sess,
                                outputs=outputs)
 
 
-def contrastive_loss(similarity_labels, features, batch_size, seq_length, latent_dim, similarity_margin=0.1):
+def contrastive_loss(similarity_labels, features, batch_size, seq_length, latent_dim, similarity_margin=0.025):
 
     '''Contrastive loss from Hadsell-et-al.'06
     http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
@@ -493,7 +493,7 @@ def train(dataset_dir=None,
                                       batch_size=batch_size,
                                       seq_length=seq_length,
                                       latent_dim=latent_dim,
-                                      similarity_margin=0.1)
+                                      similarity_margin=0.025)
         tf.summary.scalar('losses/total_loss', total_loss)
 
         # Visualize all weights and bias (takes a lot of space)
