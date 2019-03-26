@@ -172,7 +172,7 @@ def siamese_net(audio_frames=None,
         return net
 
 
-def get_label(feature_input, label, num_features, seq_length, similarity_margin=0.025):
+def get_label(feature_input, label, num_features, seq_length, similarity_margin=0.1):
     feature_input = tf.reshape(feature_input, (-1, 2, seq_length, num_features))
     label = tf.reshape(label, (-1, 2, seq_length, 2))
 
@@ -255,7 +255,7 @@ def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32
     dataset = dataset.map(lambda x, y: get_label(x, y,
                                                  num_features=640,
                                                  seq_length=seq_length,
-                                                 similarity_margin=0.05))
+                                                 similarity_margin=0.1))
     dataset = dataset.prefetch(batch_size*seq_length*10)
     return dataset
 
@@ -401,7 +401,7 @@ def save_model(sess,
                                outputs=outputs)
 
 
-def contrastive_loss(similarity_labels, features, batch_size, seq_length, latent_dim, similarity_margin=0.05):
+def contrastive_loss(similarity_labels, features, batch_size, seq_length, latent_dim, similarity_margin=0.1):
 
     '''Contrastive loss from Hadsell-et-al.'06
     http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
@@ -493,7 +493,7 @@ def train(dataset_dir=None,
                                       batch_size=batch_size,
                                       seq_length=seq_length,
                                       latent_dim=latent_dim,
-                                      similarity_margin=0.05)
+                                      similarity_margin=0.1)
         tf.summary.scalar('losses/total_loss', total_loss)
 
         # Visualize all weights and bias (takes a lot of space)
