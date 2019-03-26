@@ -172,7 +172,7 @@ def siamese_net(audio_frames=None,
         return net
 
 
-def get_label(feature_input, label, num_features, seq_length, similarity_margin=0.025):
+def get_label(feature_input, label, num_features, seq_length, similarity_margin=0.05):
     feature_input = tf.reshape(feature_input, (-1, 2, seq_length, num_features))
     label = tf.reshape(label, (-1, 2, seq_length, 2))
 
@@ -255,7 +255,7 @@ def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32
     dataset = dataset.map(lambda x, y: get_label(x, y,
                                                  num_features=640,
                                                  seq_length=seq_length,
-                                                 similarity_margin=0.025))
+                                                 similarity_margin=0.05))
     dataset = dataset.prefetch(batch_size*seq_length*10)
     return dataset
 
@@ -401,7 +401,7 @@ def save_model(sess,
                                outputs=outputs)
 
 
-def contrastive_loss(similarity_labels, features, batch_size, seq_length, latent_dim, similarity_margin=0.025):
+def contrastive_loss(similarity_labels, features, batch_size, seq_length, latent_dim, similarity_margin=0.05):
 
     '''Contrastive loss from Hadsell-et-al.'06
     http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
@@ -409,11 +409,36 @@ def contrastive_loss(similarity_labels, features, batch_size, seq_length, latent
     embedding_distance = tf.norm(features[:, 0, :, :] - features[:, 1, :, :],
                                  ord='euclidean',
                                  axis=-1)
-    pair_labels = similarity_labels
+
+    true_labels = tf.where(tf.cast(similarity_labels, tf.bool))
+    false_labels = tf.where(tf.logical_not(tf.cast(similarity_labels, tf.bool)))
+    num_true_labels = tf.shape(true_labels)[0]
+    num_false_labels = tf.shape(false_labels)[0]
+
+    min_num = tf.minimum(num_true_labels, num_false_labels)
+
+    perm_idx_true = tf.random_shuffle(tf.range(start=0, limit=num_true_labels, dtype=tf.int32))
+    perm_idx_false = tf.random_shuffle(tf.range(start=0, limit=num_false_labels, dtype=tf.int32))
+    true_labels = tf.gather(true_labels, perm_idx_true, axis=0)
+    false_labels = tf.gather(false_labels, perm_idx_false, axis=0)
+
+    true_labels = true_labels[:min_num, :]
+    false_labels = false_labels[:min_num, :]
+
+    feature_true = tf.gather_nd(embedding_distance, true_labels)
+    feature_false = tf.gather_nd(embedding_distance, false_labels)
+    feature_more = tf.gather_nd(embedding_distance, [[0, 0]])
+    label_true = tf.gather_nd(similarity_labels, true_labels)
+    label_false = tf.gather_nd(similarity_labels, false_labels)
+    label_more = tf.gather_nd(similarity_labels, [[0, 0]])
+
+    feature_input = tf.concat([feature_true, feature_false, feature_more], axis=0)
+    pair_labels = tf.concat([label_true, label_false, label_more], axis=0)
 
     mu = 1  # the margin. parameter to maybe be tuned
-    distsq = tf.square(embedding_distance)
-    distsq_contrastive = tf.square(tf.maximum(mu - embedding_distance, 0))
+    distsq = tf.square(feature_input)
+    distsq = tf.Print(distsq, [min_num, pair_labels], message='cnm')
+    distsq_contrastive = tf.square(tf.maximum(mu - feature_input, 0))
 
     loss = tf.reduce_mean(pair_labels * distsq + (1 - pair_labels) * distsq_contrastive)
     return loss, embedding_distance
@@ -493,11 +518,11 @@ def train(dataset_dir=None,
                                       batch_size=batch_size,
                                       seq_length=seq_length,
                                       latent_dim=latent_dim,
-                                      similarity_margin=0.025)
+                                      similarity_margin=0.05)
         tf.summary.scalar('losses/total_loss', total_loss)
 
         # Visualize all weights and bias (takes a lot of space)
-        visualizing_weights_bias()
+        # visualizing_weights_bias()
 
         # Get learning_rate
         global_step = tf.Variable(0, trainable=False)

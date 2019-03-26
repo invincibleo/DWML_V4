@@ -9,7 +9,7 @@ echo
 echo "Program outputs begins:"
 python siamese_train.py \
 --batch_size 6 \
---epochs 100 \
+--epochs 20000 \
 --seq_length 100 \
 --latent_dim 3 \
 --learning_rate_decay true \
