@@ -247,8 +247,8 @@ def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32
         dataset = dataset.map(parse_fn)
         dataset = dataset.batch(batch_size=seq_length)
         dataset = dataset.map(lambda x, y: (tf.transpose(x, [1, 0, 2]), tf.squeeze(y)))
-        dataset = dataset.batch(batch_size=batch_size)
         dataset = dataset.repeat(2)
+        dataset = dataset.batch(batch_size=batch_size)
 
     dataset = dataset.map(lambda x, y: get_label(x, y,
                                                  num_features=640,
@@ -481,7 +481,6 @@ def train(dataset_dir=None,
                              batch_size=batch_size,
                              is_training=is_training,
                              latent_dim=latent_dim)
-
         pred_1 = tf.reshape(pred_1, (-1, 1, seq_length, latent_dim))
         pred_2 = tf.reshape(pred_2, (-1, 1, seq_length, latent_dim))
         all_embeddings = tf.concat([pred_1, pred_2], axis=1)
@@ -549,6 +548,7 @@ def train(dataset_dir=None,
 
             # Epochs
             val_old_metric, val_new_metric = [np.inf], [0]
+            iter_total_num = (7500 - seq_length) * 9 // batch_size
             for epoch_no in range(epochs):
                 print('\nEpoch No: {}'.format(epoch_no))
                 train_loss, val_loss = 0.0, 0.0
@@ -565,39 +565,28 @@ def train(dataset_dir=None,
                     with tqdm(total=int(total_num/batch_size/seq_length), desc='Training') as pbar:
                         while True:
                             # Retrieve the values
-                            if count_num_train >= (7500 - seq_length) * 9 // seq_length // batch_size:
-                                _, _, _ = sess.run(dataset_iter)
-                                continue
-
-                            features_value, pair_label, origin_label = sess.run(dataset_iter)
-
-                            _, loss, summary, _, = sess.run((train,
-                                                            total_loss,
-                                                            merged,
-                                                            metrics_update_op_list),
-                                                           feed_dict={feature_input_1: features_value[:, [0], :, :],
-                                                                      feature_input_2: features_value[:, [1], :, :],
-                                                                      is_training: True,
-                                                                      label_input: pair_label,
-                                                                      origin_label_input: origin_label})
-                            train_loss += loss
-                            # loss_list[epoch_no, count_num_train] = loss
-                            pbar.update(batch_size)
-                            count_num_train += 1
+                            if count_num_train >= iter_total_num:
+                                break
+                            else:
+                                features_value, pair_label, origin_label = sess.run(dataset_iter)
+                                print(features_value.shape)
+                                _, loss, summary, _, = sess.run((train,
+                                                                total_loss,
+                                                                merged,
+                                                                metrics_update_op_list),
+                                                               feed_dict={feature_input_1: features_value[:, [0], :, :],
+                                                                          feature_input_2: features_value[:, [1], :, :],
+                                                                          is_training: True,
+                                                                          label_input: pair_label,
+                                                                          origin_label_input: origin_label})
+                                train_loss += loss
+                                # loss_list[epoch_no, count_num_train] = loss
+                                pbar.update(batch_size)
+                                if count_num_train % 100 == 0:
+                                    val_writer.add_summary(summary, epoch_no * iter_total_num + count_num_train)
+                                count_num_train += 1
                 except tf.errors.OutOfRangeError:
                     train_loss /= count_num_train
-                    train_mse, summary = sess.run([metrics_list, merged],
-                                                  feed_dict={feature_input_1: features_value[:, [0], :, :],
-                                                             feature_input_2: features_value[:, [1], :, :],
-                                                             is_training: False,
-                                                             label_input: pair_label,
-                                                             origin_label_input: origin_label})
-                    train_writer.add_summary(summary, epoch_no)
-                    sess.run(metrics_vars_initializer)
-                    print('Training loss: {}\n'
-                          'Training ACC: {}'.format(train_loss,
-                                                    train_mse))
-
 
                 # Validation 10 phase
                 try:
@@ -605,7 +594,7 @@ def train(dataset_dir=None,
                     with tqdm(total=int(total_num/val_atch_size/seq_length), desc='Validation') as pbar_dev:
                         while True:
                             # Retrieve the values
-                            features_value, origin_label = sess.run(dataset_iter)
+                            features_value, pair_label, origin_label = sess.run(dataset_iter)
                             loss, summary, _, = sess.run((total_loss,
                                                          merged,
                                                          metrics_update_op_list),
@@ -626,7 +615,7 @@ def train(dataset_dir=None,
                                                            is_training: False,
                                                            label_input: pair_label,
                                                            origin_label_input: origin_label})
-                    val_writer.add_summary(summary, epoch_no)
+                    val_writer.add_summary(summary, (epoch_no+1) * iter_total_num)
                     sess.run(metrics_vars_initializer)
                     print('\nEpoch: {}'.format(epoch_no))
                     print('Validation loss: {}\n'
