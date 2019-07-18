@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
     seq_length = 500
     model = "e2e_2018_seperateAE"
-    data_dir = '$VSC_DATA/datasets/waveNet_tf_16k'
+    data_dir = '$VSC_DATA/datasets/tf_records'
     log_dir = '$VSC_DATA/Learning_outputs/stateOfTheArtReproduce/{}'.format(model)
     head = ["#!/bin/bash\n",
             "#PBS -M duowei.tang@kuleuven.be -m abe\n",
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     time.sleep(1)
     run_qsub = "qsub -l partition=gpu " \
                "-l nodes=1:ppn=9:gpus=1 " \
-               "-l walltime=73:00:00 " \
+               "-l walltime=72:00:00 " \
                "-A lp_stadius_dsp bash_tmp.sh"
     os.system(run_qsub)
     print("Running...")

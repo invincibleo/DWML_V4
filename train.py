@@ -23,11 +23,11 @@ from pathlib import Path
 from tqdm import tqdm
 
 import os
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-
-import matplotlib
-matplotlib.use("TkAgg") # Add only for Mac to avoid crashing
-import matplotlib.pyplot as plt
+# os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+#
+# import matplotlib
+# matplotlib.use("TkAgg") # Add only for Mac to avoid crashing
+# import matplotlib.pyplot as plt
 
 tf.enable_eager_execution()
 
