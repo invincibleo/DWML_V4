@@ -28,7 +28,7 @@ if __name__ == "__main__":
             "source /data/leuven/324/vsc32400/miniconda3/bin/activate py3\n",
             "echo \"Program outputs begins:\"\n"]
     command = "python train.py" \
-              " --data_dir=%s" \
+              " --dataset_dir=%s" \
               " --output_dir=%s" \
               " --model=%s" \
               " --seq_length=%d" \
