@@ -30,58 +30,6 @@ from tensorflow.contrib.tensorboard.plugins import projector
 print("TensorFlow version: {}".format(tf.__version__))
 print("Eager execution: {}".format(tf.executing_eagerly()))
 
-def get_ds(dataset, is_training=True, batch_size=32, seq_length=100):
-    dataset = dataset.batch(batch_size=batch_size)
-    dataset = dataset.prefetch(buffer_size=10000)
-    return dataset
-
-
-def plotEmbedding(emb, colordata, coordinates = [0,1] , figsize = (9,7), markersize = 4, colormap = 'jet' , title = None ):
-
-    ''' Vizualize the embedding, and color the points according to the ground truth '''
-
-    """    Parameters
-    ------------------------
-    emb :                   numpy array
-                            each row is the embedding of a point
-
-    colordata:              numpy array or list
-                            length the same as the number of rows in emb - it is the groundtruth value we want to use for coloring
-
-    coordinates:            list
-                            selects the columns from emb to visualize: can visualize 2 or 3 dimensions of the embedding
-
-    remaining params:       they are purely related to the plotting - self explanatory
-
-    """
-
-    # you can only pick 3 coordinates maximum - we can not 2D or 3D only
-    if len(coordinates) > 3:
-        coordinates = coordinates[0:3]
-
-    fig = plt.figure(figsize = figsize)
-
-    if len(coordinates) == 3:
-
-        ax = fig.add_subplot(111, projection='3d')
-        h = ax.scatter(emb[:,coordinates[0]], emb[:,coordinates[1]], emb[:,coordinates[2]], c=colordata, s = markersize, cmap=colormap)
-        ax.set_xlabel('feature '+str(coordinates[0]+1),fontsize = 14 )
-        ax.set_ylabel('feature '+str(coordinates[1]+1),fontsize = 14 )
-        ax.set_zlabel('feature '+str(coordinates[2]+1),fontsize = 14 )
-        ax.set_zticklabels([])
-
-    elif len(coordinates) == 2:
-
-        ax = fig.add_subplot(111)
-        h = ax.scatter(emb[:,coordinates[0]], emb[:,coordinates[1]], c=colordata, s = markersize, cmap=colormap)
-        ax.set_xlabel('feature '+str(coordinates[0]+1),fontsize = 14 )
-        ax.set_ylabel('feature '+str(coordinates[1]+1),fontsize = 14 )
-
-    #ax.set_yticklabels([])
-    #ax.set_xticklabels([])
-    plt.title(title, fontsize = 15)
-    fig.colorbar(h)
-
 
 def parse_fn(example):
   "Parse TFExample records and perform simple data augmentation."
@@ -127,12 +75,10 @@ def get_dataset(dataset_dir, is_training=True, split_name='train', batch_size=32
 
     dataset = filename_queue.interleave(tf.data.TFRecordDataset, cycle_length=1)
     dataset = dataset.map(map_func=parse_fn)
-    dataset = dataset.shuffle(buffer_size=7500*9)
-    # dataset = dataset.batch(batch_size=seq_length)
-    # dataset = dataset.map(lambda x, y: (dict(features=tf.transpose(x['features'], [1, 0, 2])), y))
-    # dataset = dataset.repeat(100)
+    dataset = dataset.batch(batch_size=seq_length)
+    dataset = dataset.map(lambda x, y: (tf.transpose(x, [1, 0, 2]), y))
     dataset = dataset.batch(batch_size=batch_size)
-    dataset = dataset.prefetch(buffer_size=20000)
+    dataset = dataset.prefetch(buffer_size=500)
     return dataset
 
 
@@ -235,8 +181,8 @@ if __name__ == "__main__":
 
         pred_1_name = model.signature_def[signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY].outputs['pred_1'].name
         pred_1 = tf.get_default_graph().get_tensor_by_name(pred_1_name)
-        distance_name = model.signature_def[signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY].outputs['distance'].name
-        distance = tf.get_default_graph().get_tensor_by_name(distance_name)
+        all_embeddings_name = model.signature_def[signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY].outputs['all_embeddings'].name
+        all_embeddings = tf.get_default_graph().get_tensor_by_name(all_embeddings_name)
 
         # Load the checkpoint
         saver = tf.train.Saver()
@@ -249,12 +195,12 @@ if __name__ == "__main__":
             saver.restore(sess, save_path=output_dir + "/model.ckpt-" + str(checkpoint_num))
 
         count_num = 0
-        ground_truth_all = np.zeros((total_num//batch_size, batch_size, 2))
-        prediction_all = np.zeros((total_num//batch_size, batch_size, 3))
+        ground_truth_all = np.zeros((total_num//batch_size, batch_size, seq_length, 2))
+        prediction_all = np.zeros((total_num//batch_size, batch_size, seq_length, latent_dim))
         # testing training set phase
         try:
             sess.run(train_init_op)
-            with tqdm(total=int(total_num / batch_size), desc='Testing_train') as pbar:
+            with tqdm(total=int(total_num/seq_length), desc='Testing_train') as pbar:
                 while True:
                     # Retrieve testing data
                     features_value, ground_truth = sess.run(dataset_iter)
@@ -263,13 +209,13 @@ if __name__ == "__main__":
                                                  feed_dict={feature_input_1: features_value,
                                                             is_training: False})
 
-                    ground_truth_all[count_num, :] = ground_truth[:, 0, :]
-                    prediction_all[count_num, :, :] = prediction_values
+                    ground_truth_all[count_num, :, :, :] = ground_truth[:, 0, :, :]
+                    prediction_all[count_num, :, :, :] = prediction_values[:, 0, :, :]
                     pbar.update(batch_size)
                     count_num += 1
         except tf.errors.OutOfRangeError:
             ground_truth_all = np.reshape(ground_truth_all, (-1, 2))
-            prediction_all = np.reshape(prediction_all, (-1, 3))
+            prediction_all = np.reshape(prediction_all, (-1, latent_dim))
 
             ground_truth_all = ground_truth_all[0:total_num, :]
             prediction_all = prediction_all[0:total_num, :]
@@ -295,18 +241,18 @@ if __name__ == "__main__":
                 idx = 0
                 for gt in ground_truth_all[rand_idx, :]:
                     idx += 1
-                    f.write("{}\t{}\t{}\n".format(idx, int(gt[0]), int(gt[1])))
+                    f.write("{}\t{}\t{}\n".format(idx, int(gt[0]*10), int(gt[1]*10)))
 
             saver = tf.train.Saver()  # Save the model files into the same folder of embeddings
             saver.save(sess, os.path.join(output_dir + '/embeddings_train', "embeding_model.ckpt"), 1)
 
         count_num = 0
-        ground_truth_all = np.zeros((total_num//batch_size, batch_size, 2))
-        prediction_all = np.zeros((total_num//batch_size, batch_size, 3))
+        ground_truth_all = np.zeros((total_num//batch_size, batch_size, seq_length, 2))
+        prediction_all = np.zeros((total_num//batch_size, batch_size, seq_length, latent_dim))
         # Testing dev_10_ds phase
         try:
             sess.run(test_init_op)
-            with tqdm(total=int(total_num / seq_length), desc='Testing_10') as pbar:
+            with tqdm(total=int(total_num/seq_length), desc='Testing') as pbar:
                 while True:
                     # Retrieve testing data
                     features_value, ground_truth = sess.run(dataset_iter)
@@ -315,13 +261,13 @@ if __name__ == "__main__":
                                                  feed_dict={feature_input_1: features_value,
                                                             is_training: False})
 
-                    ground_truth_all[count_num, :] = ground_truth[:, 0, :]
-                    prediction_all[count_num, :, :] = prediction_values
+                    ground_truth_all[count_num, :, :, :] = ground_truth[:, 0, :, :]
+                    prediction_all[count_num, :, :, :] = prediction_values[:, 0, :, :]
                     pbar.update(batch_size)
                     count_num += 1
         except tf.errors.OutOfRangeError:
             ground_truth_all = np.reshape(ground_truth_all, (-1, 2))
-            prediction_all = np.reshape(prediction_all, (-1, 3))
+            prediction_all = np.reshape(prediction_all, (-1, latent_dim))
 
             ground_truth_all = ground_truth_all[0:total_num, :]
             prediction_all = prediction_all[0:total_num, :]
@@ -347,7 +293,7 @@ if __name__ == "__main__":
                 idx = 0
                 for gt in ground_truth_all[rand_idx, :]:
                     idx += 1
-                    f.write("{}\t{}\t{}\n".format(idx, int(gt[0]), int(gt[1])))
+                    f.write("{}\t{}\t{}\n".format(idx, int(gt[0]*10), int(gt[1]*10)))
 
             saver = tf.train.Saver()  # Save the model files into the same folder of embeddings
             saver.save(sess, os.path.join(output_dir + '/embeddings_valid', "embeding_model.ckpt"), 1)
