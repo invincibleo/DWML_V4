@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
     seq_length = 500
     model = "e2e_2018_seperateAE"
-    data_dir = '$VSC_DATA/datasets/tf_records'
+    data_dir = '$VSC_DATA/datasets/RECOLA_16K_old'
     log_dir = '$VSC_DATA/Learning_outputs/stateOfTheArtReproduce/{}'.format(model)
     head = ["#!/bin/bash\n",
             "#PBS -M duowei.tang@kuleuven.be -m abe\n",
