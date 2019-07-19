@@ -91,7 +91,7 @@ def train(dataset_dir=None,
                                                 num_features=num_features,
                                                 number_of_outputs=2,
                                                 is_training=is_training)
-        tf.losses.add_loss(extra_loss)
+        # tf.losses.add_loss(extra_loss)
         # Define the loss function
         concordance_cc2_list = []
         names_to_updates_list = []
