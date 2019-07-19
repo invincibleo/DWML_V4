@@ -34,7 +34,7 @@ if __name__ == "__main__":
               " --seq_length=%d" \
               " --batch_size=2" \
               " --learning_rate=0.0001" \
-              " --is_learning_rate_decay=False" \
+              " --learning_rate_decay=False" \
               % (data_dir,
                  log_dir,
                  model,
