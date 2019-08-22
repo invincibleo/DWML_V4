@@ -11,7 +11,6 @@ import tensorflow as tf
 
 def e2e_2017(audio_frames=None,
              hidden_units=256,
-             batch_size=2,
              seq_length=2,
              num_features=640,
              number_of_outputs=2,
@@ -87,7 +86,6 @@ def e2e_2017(audio_frames=None,
 
 def e2e_2018(audio_frames=None,
              hidden_units=256,
-             batch_size=2,
              seq_length=2,
              num_features=640,
              number_of_outputs=2,
@@ -200,7 +198,6 @@ def e2e_2018(audio_frames=None,
 
 def e2e_2018_seperateAE(audio_frames=None,
                         hidden_units=256,
-                        batch_size=2,
                         seq_length=2,
                         num_features=640,
                         number_of_outputs=2,
@@ -326,7 +323,6 @@ def e2e_2018_seperateAE(audio_frames=None,
 
 def e2e_2018_provide(audio_frames=None,
                      hidden_units=256,
-                     batch_size=2,
                      seq_length=2,
                      num_features=640,
                      number_of_outputs=2,
@@ -345,7 +341,7 @@ def e2e_2018_provide(audio_frames=None,
       net = tf.layers.max_pooling1d(net,8,8)
       net = tf.layers.dropout(net, 0.5, training=is_training)
 
-      net = tf.reshape(net,[batch_size,seq_length,num_features//640*256]) #256])
+      net = tf.reshape(net,[-1,seq_length,num_features//640*256]) #256])
 
     with tf.variable_scope("recurrent_model"):
       lstm1 = tf.contrib.rnn.LSTMCell(256,
@@ -364,10 +360,10 @@ def e2e_2018_provide(audio_frames=None,
       # weights for the fully connected layers.
       outputs, states = tf.nn.dynamic_rnn(stacked_lstm, net, dtype=tf.float32)
 
-      net = tf.reshape(outputs, (batch_size * seq_length, hidden_units))
+      net = tf.reshape(outputs, (-1, hidden_units))
 
       prediction = tf.layers.dense(net, 2)
-      prediction = tf.reshape(prediction, (batch_size, seq_length, number_of_outputs))
+      prediction = tf.reshape(prediction, (-1, seq_length, number_of_outputs))
 
     return prediction, 0.0
 

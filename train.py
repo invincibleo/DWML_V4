@@ -86,7 +86,6 @@ def train(dataset_dir=None,
                                             name='ground_truth_input_placeholder')
         # Get the output tensor
         prediction, extra_loss = eval('models.'+model_name)(audio_frames=audio_input,
-                                                            batch_size=batch_size,
                                                             hidden_units=256,
                                                             seq_length=seq_length,
                                                             num_features=num_features,
