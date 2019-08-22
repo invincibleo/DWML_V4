@@ -11,6 +11,7 @@ import tensorflow as tf
 
 def e2e_2017(audio_frames=None,
              hidden_units=256,
+             batch_size=2,
              seq_length=2,
              num_features=640,
              number_of_outputs=2,
@@ -86,6 +87,7 @@ def e2e_2017(audio_frames=None,
 
 def e2e_2018(audio_frames=None,
              hidden_units=256,
+             batch_size=2,
              seq_length=2,
              num_features=640,
              number_of_outputs=2,
@@ -198,6 +200,7 @@ def e2e_2018(audio_frames=None,
 
 def e2e_2018_seperateAE(audio_frames=None,
                         hidden_units=256,
+                        batch_size=2,
                         seq_length=2,
                         num_features=640,
                         number_of_outputs=2,
@@ -320,4 +323,51 @@ def e2e_2018_seperateAE(audio_frames=None,
     tf.summary.histogram('output_activations/arousal', tf.reshape(prediction[:, 0], [-1, ]))
     tf.summary.histogram('output_activations/valence', tf.reshape(prediction[:, 1], [-1, ]))
     return tf.reshape(prediction, (-1, seq_length, number_of_outputs)), loss_ae
+
+def e2e_2018_provide(audio_frames=None,
+                     hidden_units=256,
+                     batch_size=2,
+                     seq_length=2,
+                     num_features=640,
+                     number_of_outputs=2,
+                     is_training=False):
+    audio_input = tf.reshape(audio_frames, [-1, num_features * seq_length, 1])
+    with tf.variable_scope("audio_model"):
+      net = tf.layers.conv1d(audio_input,64,8,padding = 'same', activation=tf.nn.relu)
+      net = tf.layers.max_pooling1d(net,10,10)
+      net = tf.layers.dropout(net,0.5,training=is_training)
+
+      net = tf.layers.conv1d(net,128,6,padding = 'same', activation =tf.nn.relu)
+      net = tf.layers.max_pooling1d(net,8,8)
+      net = tf.layers.dropout(net, 0.5, training=is_training)
+
+      net = tf.layers.conv1d(net,256,6,padding = 'same', activation =tf.nn.relu)
+      net = tf.layers.max_pooling1d(net,8,8)
+      net = tf.layers.dropout(net, 0.5, training=is_training)
+
+      net = tf.reshape(net,[batch_size,seq_length,num_features//640*256]) #256])
+
+    with tf.variable_scope("recurrent_model"):
+      lstm1 = tf.contrib.rnn.LSTMCell(256,
+                                   use_peepholes=True,
+                                   cell_clip=100,
+                                   state_is_tuple=True)
+
+      lstm2 = tf.contrib.rnn.LSTMCell(256,
+                                   use_peepholes=True,
+                                   cell_clip=100,
+                                   state_is_tuple=True)
+
+      stacked_lstm = tf.contrib.rnn.MultiRNNCell([lstm1, lstm2], state_is_tuple=True)
+
+      # We have to specify the dimensionality of the Tensor so we can allocate
+      # weights for the fully connected layers.
+      outputs, states = tf.nn.dynamic_rnn(stacked_lstm, net, dtype=tf.float32)
+
+      net = tf.reshape(outputs, (batch_size * seq_length, hidden_units))
+
+      prediction = tf.layers.dense(net, 2)
+      prediction = tf.reshape(prediction, (batch_size, seq_length, number_of_outputs))
+
+    return prediction, 0.0
 
