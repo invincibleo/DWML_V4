@@ -15,7 +15,7 @@ if __name__ == "__main__":
     flags.DEFINE_boolean("is_training", False, "True for training, False for testing [Train]")
     FLAGS = flags.FLAGS
 
-    seq_length_list = [500, 700]
+    seq_length_list = [300, 500, 750]
     model = "e2e_2018_provide"
     data_dir = '$VSC_DATA/datasets/RECOLA_16K_old'
     head = ["#!/bin/bash\n",
