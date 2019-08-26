@@ -277,14 +277,14 @@ def train(dataset_dir=None,
                     val_new_metric = [val_ccc_arousal, val_ccc_valence]
 
                 # Have some penalty for the large shoot at beginning
-                if val_new_metric >= [x for x in val_old_metric]:
+                if np.any(val_new_metric > val_old_metric):
+                    val_old_metric = val_new_metric
                     # Save the model
                     save_path = modal_saver.save(sess,
                                                  save_path=output_dir + "/model.ckpt",
                                                  global_step=epoch_no,
                                                  )
                     print("Model saved in path: %s" % save_path)
-                    val_old_metric = val_new_metric
 
             # Save the model, can reload different checkpoint later in testing
             if os.path.exists(output_dir + '/model_files'):
