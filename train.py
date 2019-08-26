@@ -159,7 +159,7 @@ def train(dataset_dir=None,
             sess.run(metrics_vars_initializer)
 
             # Epochs
-            val_old_metric, val_new_metric = [0.0, 0.0], [0.0, 0.0]
+            val_old_metric, val_new_metric = np.array([0.0, 0.0]), np.array([0.0, 0.0])
             for epoch_no in range(epochs):
                 print('\nEpoch No: {}'.format(epoch_no))
                 train_loss, val_loss = 0.0, 0.0
@@ -274,7 +274,7 @@ def train(dataset_dir=None,
                                                                 val_mse_arousal,
                                                                 val_mse_valence))
                     val_writer.add_summary(summary, epoch_no)
-                    val_new_metric = [val_ccc_arousal, val_ccc_valence]
+                    val_new_metric = np.array([val_ccc_arousal, val_ccc_valence])
 
                 # Have some penalty for the large shoot at beginning
                 if np.any(val_new_metric > val_old_metric):
