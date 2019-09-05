@@ -28,13 +28,13 @@ if __name__ == "__main__":
             "echo \"Program outputs begins:\"\n"]
     for i in range(5):
         for seq_length in seq_length_list:
-            log_dir = '$VSC_DATA/Learning_outputs/stateOfTheArtReproduce/{}_{}_seq_{}'.format(i, model, seq_length)
+            log_dir = '$VSC_DATA/Learning_outputs/stateOfTheArtReproduce/{}_{}_seq_{}_RMSProp_bs5'.format(i, model, seq_length)
             command = "python train.py" \
                       " --dataset_dir=%s" \
                       " --output_dir=%s" \
                       " --model=%s" \
                       " --seq_length=%d" \
-                      " --batch_size=2" \
+                      " --batch_size=5" \
                       " --learning_rate=0.0001" \
                       " --learning_rate_decay=False" \
                       % (data_dir,

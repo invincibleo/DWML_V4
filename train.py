@@ -140,7 +140,7 @@ def train(dataset_dir=None,
             learning_rate = init_learning_rate
 
         # Define the optimizer
-        optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.9, momentum=0.1)
         train = optimizer.minimize(total_loss)
 
         # Metrics initializer
