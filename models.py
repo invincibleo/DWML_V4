@@ -328,6 +328,10 @@ def e2e_2018_provide(audio_frames=None,
                      number_of_outputs=2,
                      is_training=False):
     audio_input = tf.reshape(audio_frames, [-1, num_features * seq_length, 1])
+    audio_input = noise(audio_input,
+                        std=0.01,
+                        is_training=is_training,
+                        scope="audio_model")
     with tf.variable_scope("audio_model"):
       net = tf.layers.conv1d(audio_input,64,8,padding = 'same', activation=tf.nn.relu)
       net = tf.layers.max_pooling1d(net,10,10)
@@ -367,3 +371,8 @@ def e2e_2018_provide(audio_frames=None,
 
     return prediction, 0.0
 
+def noise(x, std, is_training, scope=None):
+    with tf.name_scope(scope, 'noise'):
+        eps = tf.random_normal(tf.shape(x), 0.0, std)
+        output = tf.where(is_training, x + eps, x)
+    return output
