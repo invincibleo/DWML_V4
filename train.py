@@ -79,7 +79,7 @@ def train(dataset_dir=None,
         dataset_iter = iterator.get_next()
 
         audio_input = tf.placeholder(dtype=tf.float32,
-                                     shape=[None, 1, seq_length, num_features],  # Can feed any shape
+                                     shape=[None, 1, None, num_features],  # Can feed any shape
                                      name='audio_input_placeholder')
         ground_truth_input = tf.placeholder(dtype=tf.float32,
                                             shape=[None, None, 2],
@@ -88,6 +88,7 @@ def train(dataset_dir=None,
         prediction, extra_loss = eval('models.'+model_name)(audio_frames=audio_input,
                                                             hidden_units=256,
                                                             seq_length=seq_length,
+                                                            batch_size=batch_size,
                                                             num_features=num_features,
                                                             number_of_outputs=2,
                                                             is_training=is_training)
