@@ -14,7 +14,7 @@ import matplotlib
 matplotlib.use("TkAgg") # Add only for Mac to avoid crashing
 import matplotlib.pyplot as plt
 
-tf.enable_eager_execution()
+# tf.enable_eager_execution()
 
 def parse_fn(example):
   "Parse TFExample records and perform simple data augmentation."
