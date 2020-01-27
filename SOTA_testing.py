@@ -20,10 +20,10 @@ from tqdm import tqdm
 import shutil
 
 import os
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-import matplotlib
-matplotlib.use("TkAgg") # Add only for Mac to avoid crashing
-import matplotlib.pyplot as plt
+# os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+# import matplotlib
+# matplotlib.use("TkAgg") # Add only for Mac to avoid crashing
+# import matplotlib.pyplot as plt
 
 print("TensorFlow version: {}".format(tf.__version__))
 print("Eager execution: {}".format(tf.executing_eagerly()))
@@ -238,7 +238,7 @@ if __name__ == "__main__":
                 # TODO: multiple datasets support
                 features_value, labels = sess.run(iter_get_next)
                 features_value = features_value['features']
-                features_value = np.reshape(features_value, (args.batch_size, args.seq_length, 1, num_features))
+                features_value = np.reshape(features_value, (args.batch_size, 1, args.seq_length, num_features))
                 labels = np.reshape(labels[:, :, :, :args.output_dims], (args.batch_size,
                                                                          args.seq_length,
                                                                          args.output_dims))
