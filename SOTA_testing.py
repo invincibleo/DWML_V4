@@ -177,7 +177,9 @@ if __name__ == "__main__":
                                              batch_size=args.batch_size,
                                              seq_length=args.seq_length,
                                              debugging=False)
-
+        iterator = tf.data.Iterator.from_structure(ds_valid.output_types, ds_valid.output_shapes)
+        iter_get_next = iterator.get_next()
+        ds_init_op = iterator.make_initializer(ds_valid)
         # ds_test = data_provider.get_dataset(args.data_dir,
         #                                     is_training=False,
         #                                     split_name='test',
@@ -231,13 +233,13 @@ if __name__ == "__main__":
         ground_truth_all = np.zeros((total_num_points, args.batch_size, args.output_dims))
         prediction_all = np.zeros((total_num_points, args.batch_size, args.output_dims))
         try:
-            ds_valid.init_dataset(sess=sess)
+            sess.run(ds_init_op)
             while True:
                 # TODO: multiple datasets support
-                features_value, labels = sess.run(ds_valid.iter_get_next)
-                features_value = np.reshape(features_value, (-1, ds_valid.seq_length, 1, num_features))
+                features_value, labels = sess.run(iter_get_next)
+                features_value = np.reshape(features_value, (-1, args.seq_length, 1, num_features))
                 labels = np.reshape(labels[:, :, :, :args.output_dims], (-1,
-                                                                         ds_valid.seq_length,
+                                                                         args.seq_length,
                                                                          args.output_dims))
 
                 prediction_values = sess.run([predictions_logit],
