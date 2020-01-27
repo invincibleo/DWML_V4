@@ -227,6 +227,9 @@ if __name__ == "__main__":
             saver.restore(sess, save_path=model_dir + "/model.ckpt-" + str(args.checkpoint_num))
 
         npy_output_dir = os.path.join(model_dir, 'npy')
+        if not os.path.exists(npy_output_dir):
+            os.makedirs(npy_output_dir)
+
         # Validation set
         count_num = 0
         total_num_points = 7500 * 9 // args.batch_size // args.seq_length
