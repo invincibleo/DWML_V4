@@ -237,8 +237,9 @@ if __name__ == "__main__":
             while True:
                 # TODO: multiple datasets support
                 features_value, labels = sess.run(iter_get_next)
-                features_value = np.reshape(features_value, (-1, args.seq_length, 1, num_features))
-                labels = np.reshape(labels[:, :, :, :args.output_dims], (-1,
+                features_value = features_value['features']
+                features_value = np.reshape(features_value, (args.batch_size, args.seq_length, 1, num_features))
+                labels = np.reshape(labels[:, :, :, :args.output_dims], (args.batch_size,
                                                                          args.seq_length,
                                                                          args.output_dims))
 
