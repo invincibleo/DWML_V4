@@ -269,7 +269,7 @@ if __name__ == "__main__":
             va_ccc = cal_ccc(prediction_all[:, :, 1], ground_truth_all[:, :, 1], seprate=args.seprate)
 
             print("Arousal_CCC:{}, Valence_CCC:{}".format(ar_ccc, va_ccc))
-            np.save(npy_output_dir + '/Pred_val_sq_{}k_a{}_v{}.npy'.format(args.seq_length//1000,
+            np.save(npy_output_dir + '/Pred_val_sq_{}k_a{}_v{}.npy'.format(args.seq_length,
                                                                            int(np.ceil(ar_ccc * 10000)),
                                                                            int(np.ceil(va_ccc * 10000))),
                     [ground_truth_all, prediction_all, ar_ccc, va_ccc])
