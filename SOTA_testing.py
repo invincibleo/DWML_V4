@@ -229,9 +229,9 @@ if __name__ == "__main__":
         npy_output_dir = os.path.join(model_dir, 'npy')
         # Validation set
         count_num = 0
-        total_num_points = 7500 * 9 // args.batch_size
-        ground_truth_all = np.zeros((total_num_points, args.batch_size, args.output_dims))
-        prediction_all = np.zeros((total_num_points, args.batch_size, args.output_dims))
+        total_num_points = 7500 * 9 // args.batch_size // args.seq_length
+        ground_truth_all = np.zeros((total_num_points, args.batch_size, args.seq_length, args.output_dims))
+        prediction_all = np.zeros((total_num_points, args.batch_size, args.seq_length, args.output_dims))
         try:
             sess.run(ds_init_op)
             while True:
@@ -249,8 +249,8 @@ if __name__ == "__main__":
                                                         is_training: False})
                 # Unwrap from list
                 prediction_values = prediction_values[0]
-                ground_truth_all[count_num, :, :] = labels
-                prediction_all[count_num, :, :] = prediction_values
+                ground_truth_all[count_num, :, :, :] = labels
+                prediction_all[count_num, :, :, :] = prediction_values
                 count_num += 1
         except tf.errors.OutOfRangeError:
             ground_truth_all = np.reshape(ground_truth_all, (-1, args.output_dims))
